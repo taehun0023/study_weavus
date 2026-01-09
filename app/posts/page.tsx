@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth"
-import { DashboardHeader } from "@/components/dashboard-header"
+import DashboardHeader from "@/components/dashboard-header"
 import { PostsFilter } from "@/components/posts-filter"
 import { PostsList } from "@/components/posts-list"
 

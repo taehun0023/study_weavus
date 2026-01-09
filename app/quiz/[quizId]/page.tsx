@@ -1,7 +1,7 @@
 import { redirect, notFound } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth"
 import { sql } from "@/lib/db"
-import { DashboardHeader } from "@/components/dashboard-header"
+import DashboardHeader from "@/components/dashboard-header"
 import { QuizContainer } from "@/components/quiz-container"
 
 interface QuizPageProps {

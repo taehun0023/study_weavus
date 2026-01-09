@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth"
-import { DashboardHeader } from "@/components/dashboard-header"
+import DashboardHeader from "@/components/dashboard-header"
 import { OverallProgress } from "@/components/overall-progress"
 import { CourseCards } from "@/components/course-cards"
 import { RecentActivity } from "@/components/recent-activity"
