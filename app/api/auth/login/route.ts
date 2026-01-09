@@ -1,7 +1,7 @@
 // app/api/auth/login/route.ts
 import { NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
-import { sql, type User } from "@/lib/db"
+import { sql } from "@/lib/db"
 
 export const runtime = "nodejs"
 
@@ -10,10 +10,18 @@ type LoginBody = {
   password: string
 }
 
+type UserRow = {
+  id: number
+  username: string
+  password_hash: string
+  display_name: string
+  role: "USER" | "ADMIN"
+  created_at: Date
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Partial<LoginBody>
-
     const username = (body.username ?? "").trim()
     const password = body.password ?? ""
 
@@ -24,15 +32,15 @@ export async function POST(req: Request) {
       )
     }
 
-    // ✅ DB 조회
-    const rows = await sql<User>`
+    // ✅ 스키마 + 테이블을 명시적으로 고정 (정답)
+    const rows = await sql<UserRow>`
       SELECT id, username, password_hash, display_name, role, created_at
-      FROM users
+      FROM public.users
       WHERE username = ${username}
       LIMIT 1
     `
-    const user = rows[0]
 
+    const user = rows[0]
     if (!user) {
       return NextResponse.json(
         { ok: false, message: "Invalid credentials" },
@@ -40,7 +48,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // ✅ 비밀번호 검증
     const ok = await bcrypt.compare(password, user.password_hash)
     if (!ok) {
       return NextResponse.json(
@@ -49,7 +56,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // ✅ 성공 응답(세션/토큰은 너 프로젝트 방식에 맞게 추가)
     return NextResponse.json({
       ok: true,
       user: {
@@ -61,17 +67,9 @@ export async function POST(req: Request) {
       },
     })
   } catch (e: any) {
-    // ✅ 여기서 500의 진짜 원인을 응답/로그로 확인 가능
     console.error("[LOGIN_ERROR]", e)
-
     return NextResponse.json(
-      {
-        ok: false,
-        message: e?.message ?? "Internal Server Error",
-        // 아래 2개는 pg에서만 주로 존재하지만 혹시 있으면 같이 보여줌
-        code: e?.code,
-        detail: e?.detail,
-      },
+      { ok: false, message: e?.message ?? "Internal Server Error" },
       { status: 500 }
     )
   }
