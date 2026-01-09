@@ -19,6 +19,11 @@ type UserRow = {
   created_at: Date
 }
 
+function isBcryptHash(v: string) {
+  // bcryptjs 해시는 보통 $2a$ / $2b$ / $2y$ 로 시작
+  return typeof v === "string" && /^\$2[aby]\$\d{2}\$/.test(v)
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Partial<LoginBody>
@@ -32,7 +37,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // ✅ 스키마 + 테이블을 명시적으로 고정 (정답)
     const rows = await sql<UserRow>`
       SELECT id, username, password_hash, display_name, role, created_at
       FROM public.users
@@ -42,16 +46,33 @@ export async function POST(req: Request) {
 
     const user = rows[0]
     if (!user) {
+      // ✅ username이 DB에 없음
       return NextResponse.json(
-        { ok: false, message: "Invalid credentials" },
+        { ok: false, message: "User not found" },
         { status: 401 }
+      )
+    }
+
+    // ✅ password_hash가 bcrypt 형태가 아니면 compare가 무조건 실패
+    if (!isBcryptHash(user.password_hash)) {
+      console.error("[LOGIN_ERROR] password_hash is not bcrypt", {
+        username: user.username,
+        password_hash_preview: String(user.password_hash).slice(0, 12),
+      })
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "Password hash is not bcrypt (DB data issue)",
+        },
+        { status: 500 }
       )
     }
 
     const ok = await bcrypt.compare(password, user.password_hash)
     if (!ok) {
+      // ✅ 비밀번호 불일치
       return NextResponse.json(
-        { ok: false, message: "Invalid credentials" },
+        { ok: false, message: "Invalid password" },
         { status: 401 }
       )
     }
