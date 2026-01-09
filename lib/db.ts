@@ -19,9 +19,8 @@ function buildConfig(): PoolConfig {
     connectionString,
     ssl: { rejectUnauthorized: false },
 
-    // ✅ (선택) search_path 고정: 프로젝트 전반에서 public.users를 기본으로 보게 함
-    // 쿼리에서 public.users로 명시하면 이 옵션은 없어도 괜찮음.
-    options: "-c search_path=public",
+    // ❌ Neon pooler(pgBouncer)는 startup options(search_path 등) 지원 안 함
+    // options: "-c search_path=public",
 
     max: 5,
     idleTimeoutMillis: 10_000,
@@ -59,16 +58,4 @@ export async function sql<T = any>(
     const detail = e?.detail ? ` detail=${e.detail}` : ""
     throw new Error(`[DB_ERROR]${code}${msg}${detail}`)
   }
-}
-
-/* ===== 타입 ===== */
-export type UserRole = "USER" | "ADMIN"
-
-export type User = {
-  id: number
-  username: string
-  password_hash: string
-  display_name: string
-  role: UserRole
-  created_at: Date
 }
