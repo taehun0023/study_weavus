@@ -1,7 +1,12 @@
 // app/api/auth/login/route.ts
 import { NextResponse } from "next/server"
-import bcrypt from "bcryptjs"
 import { sql } from "@/lib/db"
+import {
+  verifyPassword,
+  upgradePasswordHashIfNeeded,
+  createSession,
+  setSessionCookie,
+} from "@/lib/auth"
 
 export const runtime = "nodejs"
 
@@ -15,13 +20,7 @@ type UserRow = {
   username: string
   password_hash: string
   display_name: string
-  role: "USER" | "ADMIN"
-  created_at: Date
-}
-
-function isBcryptHash(v: string) {
-  // bcryptjs 해시는 보통 $2a$ / $2b$ / $2y$ 로 시작
-  return typeof v === "string" && /^\$2[aby]\$\d{2}\$/.test(v)
+  user_role: "USER" | "ADMIN"
 }
 
 export async function POST(req: Request) {
@@ -37,45 +36,29 @@ export async function POST(req: Request) {
       )
     }
 
+    // ✅ auth.ts가 user_role을 쓰고 있으므로 user_role로 통일
     const rows = await sql<UserRow>`
-      SELECT id, username, password_hash, display_name, role, created_at
+      SELECT id, username, password_hash, display_name, user_role
       FROM public.users
       WHERE username = ${username}
       LIMIT 1
     `
-
     const user = rows[0]
     if (!user) {
-      // ✅ username이 DB에 없음
-      return NextResponse.json(
-        { ok: false, message: "User not found" },
-        { status: 401 }
-      )
+      return NextResponse.json({ ok: false, message: "User not found" }, { status: 401 })
     }
 
-    // ✅ password_hash가 bcrypt 형태가 아니면 compare가 무조건 실패
-    if (!isBcryptHash(user.password_hash)) {
-      console.error("[LOGIN_ERROR] password_hash is not bcrypt", {
-        username: user.username,
-        password_hash_preview: String(user.password_hash).slice(0, 12),
-      })
-      return NextResponse.json(
-        {
-          ok: false,
-          message: "Password hash is not bcrypt (DB data issue)",
-        },
-        { status: 500 }
-      )
-    }
-
-    const ok = await bcrypt.compare(password, user.password_hash)
+    const ok = await verifyPassword(password, user.password_hash)
     if (!ok) {
-      // ✅ 비밀번호 불일치
-      return NextResponse.json(
-        { ok: false, message: "Invalid password" },
-        { status: 401 }
-      )
+      return NextResponse.json({ ok: false, message: "Invalid password" }, { status: 401 })
     }
+
+    // ✅ 레거시 해시(sha256)였으면 bcrypt로 업그레이드
+    await upgradePasswordHashIfNeeded(user.id, password, user.password_hash)
+
+    // ✅ 세션 생성 + 쿠키 저장 (이게 메인 튕김을 막는 핵심)
+    const token = await createSession(user.id)
+    await setSessionCookie(token)
 
     return NextResponse.json({
       ok: true,
@@ -83,8 +66,7 @@ export async function POST(req: Request) {
         id: user.id,
         username: user.username,
         display_name: user.display_name,
-        role: user.role,
-        created_at: user.created_at,
+        user_role: user.user_role,
       },
     })
   } catch (e: any) {

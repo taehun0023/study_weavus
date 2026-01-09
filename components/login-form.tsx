@@ -1,10 +1,9 @@
+// components/login-form.tsx
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -25,20 +24,22 @@ export function LoginForm() {
     setIsLoading(true)
 
     try {
-      const response = await fetch("/api/auth/login", {
+      const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
       })
 
-      const data = await response.json()
+      const data = await res.json().catch(() => ({}))
 
-      if (!response.ok) {
-        setError(data.error || "로그인에 실패했습니다.")
+      // ✅ 우리 API는 { ok: boolean, message?: string }
+      if (!res.ok || !data?.ok) {
+        setError(data?.message ?? "로그인에 실패했습니다.")
         return
       }
 
-      router.push("/")
+      // ✅ 로그인 성공 → 메인 이동 + 서버컴포넌트 갱신
+      router.replace("/")
       router.refresh()
     } catch {
       setError("서버 연결에 실패했습니다.")
@@ -50,7 +51,6 @@ export function LoginForm() {
   return (
     <Card className="border-border bg-card">
       <form onSubmit={handleSubmit}>
-        {/* ✅ 전체를 위로 조금 올리기: pt-6 → pt-4, space-y-4 → space-y-3 */}
         <CardContent className="pt-4 space-y-3">
           {error && (
             <Alert variant="destructive">
@@ -58,12 +58,10 @@ export function LoginForm() {
             </Alert>
           )}
 
-          {/* ✅ 사용자명 입력: 라벨/인풋 간격 유지 */}
           <div className="space-y-2">
             <Label htmlFor="username">사용자명</Label>
             <Input
               id="username"
-              type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="사용자명을 입력하세요"
@@ -73,7 +71,6 @@ export function LoginForm() {
             />
           </div>
 
-          {/* ✅ 비밀번호 입력: 위로 너무 붙지 않게만 */}
           <div className="space-y-2">
             <Label htmlFor="password">비밀번호</Label>
             <Input
@@ -89,7 +86,6 @@ export function LoginForm() {
           </div>
         </CardContent>
 
-        {/* ✅ 버튼과 입력칸 사이 간격 늘리기: footer에 pt 추가 + 버튼에 mt */}
         <CardFooter className="flex flex-col gap-4 pt-6">
           <Button type="submit" className="w-full h-11 mt-1" disabled={isLoading}>
             {isLoading ? (
@@ -102,12 +98,9 @@ export function LoginForm() {
             )}
           </Button>
 
-          {/* ✅ 회원가입은 없다고 했으니, 링크 제거하고 안내 문구로 변경 */}
           <p className="text-sm text-muted-foreground text-center">
             계정이 없으신가요?{" "}
-            <span className="text-muted-foreground underline underline-offset-4">
-              관리자에게 계정 발급을 요청하세요
-            </span>
+            <span className="underline underline-offset-4">관리자에게 계정 발급을 요청하세요</span>
           </p>
         </CardFooter>
       </form>
