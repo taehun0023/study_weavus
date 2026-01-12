@@ -1,32 +1,44 @@
 // components/posts-filter.tsx
 "use client"
 
-import { useRouter } from "next/navigation"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Button } from "@/components/ui/button"
 
-export function PostsFilter({ currentCourse }: { currentCourse: string }) {
+interface PostsFilterProps {
+  currentCourse: string
+  currentType: string
+}
+
+export function PostsFilter({
+  currentCourse,
+  currentType,
+}: PostsFilterProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  function setType(type: string) {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set("course", currentCourse)
+    params.set("type", type)
+    router.push(`/posts?${params.toString()}`)
+  }
 
   return (
-    <div className="flex items-center gap-3">
-      <div className="w-48">
-        <Select
-          value={currentCourse}
-          onValueChange={(v) => {
-            router.replace(`/posts?course=${encodeURIComponent(v)}`)
-            router.refresh()
-          }}
+    <div className="flex gap-2">
+      {[
+        { key: "all", label: "전체" },
+        { key: "lesson", label: "수업내용" },
+        { key: "quiz", label: "문제풀이" },
+        { key: "reference", label: "참고자료" },
+      ].map((t) => (
+        <Button
+          key={t.key}
+          variant={currentType === t.key ? "default" : "secondary"}
+          onClick={() => setType(t.key)}
         >
-          <SelectTrigger>
-            <SelectValue placeholder="과목 선택" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="java">Java</SelectItem>
-            {/* 필요하면 추가 */}
-            {/* <SelectItem value="spring">Spring</SelectItem> */}
-          </SelectContent>
-        </Select>
-      </div>
+          {t.label}
+        </Button>
+      ))}
     </div>
   )
 }
