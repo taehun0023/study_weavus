@@ -18,7 +18,6 @@ export async function PostsList({
   userId: number
   courseSlug: string
 }) {
-  // ✅ lesson만 가져오기 (일람에는 수업내용만!)
   const lessons = await sql<LessonRow>`
     SELECT 
       p.id,
@@ -32,14 +31,11 @@ export async function PostsList({
     ORDER BY p.id
   `
 
-  if (lessons.length === 0) {
-    return <div className="text-muted-foreground">수업내용이 없습니다.</div>
-  }
-
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {lessons.map((lesson) => (
-        <Link key={lesson.id} href={`/posts/${lesson.id}`} className="block">
+        // ✅ Link가 최상위. button/form 없음. 리로드/submit 절대 안 남.
+        <Link key={lesson.id} href={`/posts/${lesson.id}`} prefetch className="block">
           <Card className="bg-card border-border hover:border-primary/50 transition-colors cursor-pointer h-full">
             <CardHeader className="pb-2">
               <div className="flex items-center gap-2">
