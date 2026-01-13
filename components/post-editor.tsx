@@ -15,7 +15,7 @@ import Link from "@tiptap/extension-link"
 import Placeholder from "@tiptap/extension-placeholder"
 import Underline from "@tiptap/extension-underline"
 
-type Difficulty = "easy" | "medium" | "project" | null
+type Difficulty = "easy" | "medium" | "hard" | "project" | null
 
 type Course = {
   id: number

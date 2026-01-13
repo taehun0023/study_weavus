@@ -10,15 +10,26 @@ import DashboardHeader from "@/components/dashboard-header"
 import PostEditor from "@/components/post-editor"
 
 type Params = { postId: string }
-
 type CourseRow = { id: number; name: string; slug: string }
+
+type DbDifficulty = "easy" | "medium" | "hard" | "project" | null
+type EditorDifficulty = "easy" | "medium" | "project" | null
 
 type PostRow = {
   id: number
   title: string
   content: string | null
-  difficulty: "easy" | "medium" | "hard" | "project" | null
+  difficulty: DbDifficulty
   course_id: number
+}
+
+function toEditorDifficulty(d: DbDifficulty): EditorDifficulty {
+  if (!d) return null
+  if (d === "hard") return "project"
+  if (d === "project") return "project"
+  if (d === "easy") return "easy"
+  if (d === "medium") return "medium"
+  return null
 }
 
 export default async function EditPostPage({ params }: { params: Params }) {
@@ -26,7 +37,7 @@ export default async function EditPostPage({ params }: { params: Params }) {
   if (!user) redirect("/login")
   if (user.user_role !== "ADMIN") redirect("/posts")
 
-  const postId = Number.parseInt(String(params.postId ?? ""), 10)
+  const postId = Number.parseInt(params.postId, 10)
   if (!Number.isFinite(postId) || postId <= 0) redirect("/posts")
 
   const courses = await sql<CourseRow>`
@@ -44,16 +55,11 @@ export default async function EditPostPage({ params }: { params: Params }) {
   const post = rows?.[0]
   if (!post) redirect("/posts")
 
-  const raw = post.content ?? ""
-  const fixed = raw.includes("\\n") ? raw.replace(/\\n/g, "\n") : raw
-
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader user={user} />
       <main className="container mx-auto px-4 py-8 space-y-6">
-        <div className="flex items-baseline justify-between gap-3">
-          <h1 className="text-2xl font-bold">글 수정</h1>
-        </div>
+        <h1 className="text-2xl font-bold">글 수정</h1>
 
         <PostEditor
           courses={courses}
@@ -62,8 +68,8 @@ export default async function EditPostPage({ params }: { params: Params }) {
           initial={{
             title: post.title ?? "",
             courseId: post.course_id,
-            difficulty: post.difficulty === "hard" ? "project" : (post.difficulty as any),
-            content: fixed,
+            difficulty: toEditorDifficulty(post.difficulty),
+            content: post.content ?? "",
           }}
         />
       </main>
