@@ -2,33 +2,55 @@
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth"
 import DashboardHeader from "@/components/dashboard-header"
+import { PostsFilter } from "@/components/posts-filter"
 import { PostsList } from "@/components/posts-list"
+import { sql } from "@/lib/db"
+
+type CourseRow = {
+  name: string
+  slug: string
+}
 
 interface PostsPageProps {
-  // Next.js App Router: searchParams는 Promise가 아니라 plain object로 전달됩니다.
   searchParams?: {
     course?: string
+    difficulty?: string
   }
 }
 
 export default async function PostsPage({ searchParams }: PostsPageProps) {
   const user = await getCurrentUser()
+  if (!user) redirect("/login")
 
-  if (!user) {
-    redirect("/login")
-  }
+  const currentCourse = searchParams?.course || "java"
+  const currentDifficulty = searchParams?.difficulty || "all"
 
-  const courseSlug = searchParams?.course || "java"
+  const courses = await sql<CourseRow>`
+    SELECT name, slug
+    FROM public.courses
+    ORDER BY name
+  `
 
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader user={user} />
 
       <main className="container mx-auto px-4 py-8 space-y-6">
-        <h1 className="text-2xl font-bold text-foreground">게시글 목록</h1>
+        <div className="flex flex-col gap-3">
+          <h1 className="text-2xl font-bold text-foreground">게시글 목록</h1>
 
-        {/* ✅ 목록에는 수업내용만 */}
-        <PostsList userId={user.id} courseSlug={courseSlug} />
+          <PostsFilter
+            courses={courses}
+            currentCourse={currentCourse}
+            currentDifficulty={currentDifficulty}
+          />
+        </div>
+
+        <PostsList
+          userId={user.id}
+          courseSlug={currentCourse}
+          difficultyFilter={currentDifficulty}
+        />
       </main>
     </div>
   )

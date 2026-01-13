@@ -1,44 +1,94 @@
 // components/posts-filter.tsx
 "use client"
 
-import { useRouter, useSearchParams } from "next/navigation"
-import { Button } from "@/components/ui/button"
+import { useMemo } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+
+type CourseOption = {
+  name: string
+  slug: string
+}
 
 interface PostsFilterProps {
+  courses: CourseOption[]
   currentCourse: string
-  currentType: string
+  currentDifficulty: string
 }
 
 export function PostsFilter({
+  courses,
   currentCourse,
-  currentType,
+  currentDifficulty,
 }: PostsFilterProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  function setType(type: string) {
+  const courseOptions = useMemo(() => {
+    if (!courses || courses.length === 0) return [{ slug: "java", name: "Java" }]
+    return courses
+  }, [courses])
+
+  function push(next: Record<string, string | null | undefined>) {
     const params = new URLSearchParams(searchParams.toString())
-    params.set("course", currentCourse)
-    params.set("type", type)
-    router.push(`/posts?${params.toString()}`)
+
+    const course = next.course ?? params.get("course") ?? currentCourse ?? "java"
+    params.set("course", course)
+
+    const diff =
+      next.difficulty ?? params.get("difficulty") ?? currentDifficulty ?? "all"
+    if (!diff || diff === "all") params.delete("difficulty")
+    else params.set("difficulty", diff)
+
+    const qs = params.toString()
+    router.push(qs ? `${pathname}?${qs}` : pathname)
   }
 
   return (
-    <div className="flex gap-2">
-      {[
-        { key: "all", label: "전체" },
-        { key: "lesson", label: "수업내용" },
-        { key: "quiz", label: "문제풀이" },
-        { key: "reference", label: "참고자료" },
-      ].map((t) => (
-        <Button
-          key={t.key}
-          variant={currentType === t.key ? "default" : "secondary"}
-          onClick={() => setType(t.key)}
-        >
-          {t.label}
-        </Button>
-      ))}
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {/* 왼쪽: 과목 드롭다운 */}
+      <Select value={currentCourse} onValueChange={(v) => push({ course: v })}>
+        <SelectTrigger className="w-full sm:w-[180px]">
+          <SelectValue placeholder="과목 선택" />
+        </SelectTrigger>
+        <SelectContent>
+          {courseOptions.map((c) => (
+            <SelectItem key={c.slug} value={c.slug}>
+              {c.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {/* 오른쪽: 난이도 필터 */}
+      <ToggleGroup
+        type="single"
+        value={currentDifficulty}
+        onValueChange={(v) => push({ difficulty: v || "all" })}
+        variant="outline"
+        className="grid w-full grid-cols-4 sm:w-auto"
+      >
+        <ToggleGroupItem value="all" className="text-sm">
+          전체
+        </ToggleGroupItem>
+        <ToggleGroupItem value="easy" className="text-sm">
+          easy
+        </ToggleGroupItem>
+        <ToggleGroupItem value="medium" className="text-sm">
+          medium
+        </ToggleGroupItem>
+        <ToggleGroupItem value="project" className="text-sm">
+          project
+        </ToggleGroupItem>
+      </ToggleGroup>
     </div>
   )
 }
