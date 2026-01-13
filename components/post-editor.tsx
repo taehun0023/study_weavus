@@ -15,8 +15,15 @@ import Link from "@tiptap/extension-link"
 import Placeholder from "@tiptap/extension-placeholder"
 import Underline from "@tiptap/extension-underline"
 
-type Course = { id: number; name: string; slug: string }
-type Difficulty = "easy" | "medium" | "project"
+export type Course = { id: number; name: string; slug: string }
+export type Difficulty = "easy" | "medium" | "project"
+
+export type PostEditorPayload = {
+  title: string
+  courseId: number
+  difficulty: Difficulty
+  content: string
+}
 
 export default function PostEditor({
   courses,
@@ -30,14 +37,11 @@ export default function PostEditor({
     difficulty: Difficulty
     content: string
   }
-  onSubmit?: (payload: {
-    title: string
-    courseId: number
-    difficulty: Difficulty
-    content: string
-  }) => Promise<void>
+  onSubmit?: (payload: PostEditorPayload) => Promise<void>
 }) {
   const router = useRouter()
+  const imgRef = useRef<HTMLInputElement | null>(null)
+  const fileRef = useRef<HTMLInputElement | null>(null)
 
   const safeCourses = Array.isArray(courses) ? courses : []
   const initialCourseId = initial?.courseId ?? safeCourses[0]?.id ?? 0
@@ -46,17 +50,13 @@ export default function PostEditor({
   const [courseId, setCourseId] = useState<number>(initialCourseId)
   const [difficulty, setDifficulty] = useState<Difficulty>(initial?.difficulty ?? "easy")
   const [content, setContent] = useState<string>(initial?.content ?? "")
+
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState<null | "image" | "file">(null)
 
-  const imgRef = useRef<HTMLInputElement | null>(null)
-  const fileRef = useRef<HTMLInputElement | null>(null)
-
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
-      }),
+      StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
       Underline,
       Image.configure({ inline: false, allowBase64: false }),
       Link.configure({
@@ -65,9 +65,7 @@ export default function PostEditor({
         linkOnPaste: true,
         HTMLAttributes: { rel: "noreferrer", target: "_blank" },
       }),
-      Placeholder.configure({
-        placeholder: "",
-      }),
+      Placeholder.configure({ placeholder: "" }),
     ],
     content: initial?.content ?? "",
     editorProps: {
@@ -76,20 +74,30 @@ export default function PostEditor({
           "min-h-[520px] rounded-md border border-border bg-background/40 p-4 outline-none prose prose-invert max-w-none",
       },
     },
-    onUpdate: ({ editor }) => {
-      setContent(editor.getHTML())
-    },
+    onUpdate: ({ editor }) => setContent(editor.getHTML()),
   })
 
-  // ✅ initial이 바뀌었을 때(편집페이지) 에디터에도 주입
+  // ✅ 편집 페이지에서 초기값 반영
   useEffect(() => {
     if (!editor) return
     if (initial?.content != null) editor.commands.setContent(initial.content)
   }, [editor, initial?.content])
 
   const canSubmit = useMemo(() => {
-    return title.trim().length > 0 && courseId !== 0 && !saving && uploading === null
+    return title.trim().length > 0 && courseId > 0 && !saving && uploading === null
   }, [title, courseId, saving, uploading])
+
+  function escapeHtmlText(s: string) {
+    return s
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;")
+  }
+  function escapeHtmlAttr(s: string) {
+    return escapeHtmlText(s)
+  }
 
   async function uploadAndInsert(kind: "image" | "file", file: File) {
     if (!editor) return
@@ -132,12 +140,7 @@ export default function PostEditor({
     }
   }
 
-  async function defaultSubmit(payload: {
-    title: string
-    courseId: number
-    difficulty: Difficulty
-    content: string
-  }) {
+  async function defaultCreate(payload: PostEditorPayload) {
     const res = await fetch("/api/posts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -149,11 +152,13 @@ export default function PostEditor({
         type: "lesson",
       }),
     })
+
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
       alert(data?.message ?? `저장 실패 (${res.status})`)
       return
     }
+
     const id = data?.id
     router.push(id ? `/posts/${id}` : "/posts")
     router.refresh()
@@ -168,10 +173,12 @@ export default function PostEditor({
 
     setSaving(true)
     try {
+      const payload: PostEditorPayload = { title: t, courseId, difficulty, content: html }
+
       if (onSubmit) {
-        await onSubmit({ title: t, courseId, difficulty, content: html })
+        await onSubmit(payload)
       } else {
-        await defaultSubmit({ title: t, courseId, difficulty, content: html })
+        await defaultCreate(payload)
       }
     } finally {
       setSaving(false)
@@ -186,7 +193,7 @@ export default function PostEditor({
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: Java 기초 문법" />
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
             <div className="text-sm text-muted-foreground">과목</div>
             <div className="w-[160px]">
@@ -204,8 +211,6 @@ export default function PostEditor({
               </Select>
             </div>
           </div>
-
-          <div className="flex-1" />
 
           <div className="flex items-center gap-2">
             <div className="text-sm text-muted-foreground">난이도</div>
@@ -255,7 +260,9 @@ export default function PostEditor({
           </div>
         </div>
 
-        <div>{editor ? <EditorContent editor={editor} /> : null}</div>
+        <div className="rounded-md border border-border bg-background/30">
+          <EditorContent editor={editor} />
+        </div>
 
         <Button className="w-full" onClick={handleSave} disabled={!canSubmit}>
           {saving ? "저장 중..." : "저장하기"}
@@ -263,16 +270,4 @@ export default function PostEditor({
       </CardContent>
     </Card>
   )
-}
-
-function escapeHtmlText(s: string) {
-  return s
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;")
-}
-function escapeHtmlAttr(s: string) {
-  return escapeHtmlText(s)
 }
