@@ -8,7 +8,7 @@ import PostAdminActions from "@/components/post-admin-actions"
 type Difficulty = "easy" | "medium" | "hard" | "project" | null
 
 type PostRow = {
-  id: number
+  id: number | string // ✅ Neon/pg에서 string으로 올 때도 있어서 넉넉하게
   title: string
   difficulty: Difficulty
   course_name: string
@@ -91,15 +91,20 @@ export async function PostsList({
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-      {rows.map((row) => (
-        <Link key={row.id} href={`/posts/${row.id}`} className="block">
-          <Card className="relative bg-card border-border hover:border-primary/50 transition-colors cursor-pointer h-full">
-            {/* ✅ 관리자 수정/삭제 버튼: 카드 오른쪽 상단 */}
+      {rows.map((row) => {
+        const postId = String(row.id) // ✅ 무조건 string으로 통일해서 client로 넘김
+
+        return (
+          <Card
+            key={postId}
+            className="relative bg-card border-border hover:border-primary/50 transition-colors h-full"
+          >
+            {/* ✅ 관리자 버튼: 카드 오른쪽 상단 (클릭해도 상세로 안 튐) */}
             {isAdmin && (
-              <div className="absolute right-3 top-3 z-10">
+              <div className="absolute right-3 top-3 z-20">
                 <PostAdminActions
-                  postId={row.id}
-                  editHref={`/posts/${row.id}/edit`}
+                  postId={postId}
+                  editHref={`/posts/${postId}/edit`}
                   afterDeleteHref={returnHref}
                   size="sm"
                 />
@@ -108,7 +113,6 @@ export async function PostsList({
 
             <CardHeader className="pb-2">
               <div className="flex flex-wrap items-center gap-2 pr-20">
-                {/* ✅ 일람은 수업내용만 */}
                 <Badge variant="outline">수업내용</Badge>
 
                 {row.difficulty && (
@@ -117,15 +121,28 @@ export async function PostsList({
                   </Badge>
                 )}
               </div>
-              <CardTitle className="mt-2">{row.title}</CardTitle>
+
+              {/* ✅ 제목 클릭하면 상세로 */}
+              <CardTitle className="mt-2">
+                <Link href={`/posts/${postId}`} className="hover:underline">
+                  {row.title}
+                </Link>
+              </CardTitle>
             </CardHeader>
 
             <CardContent className="text-sm text-muted-foreground">
               과목: {row.course_name}
             </CardContent>
+
+            {/* ✅ 카드 바디 클릭해도 상세로 (버튼은 z-20이라 영향 없음) */}
+            <Link
+              href={`/posts/${postId}`}
+              className="absolute inset-0 z-10 rounded-2xl"
+              aria-label="open post"
+            />
           </Card>
-        </Link>
-      ))}
+        )
+      })}
     </div>
   )
 }

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
@@ -32,7 +32,7 @@ export default function PostEditor({ courses }: { courses: Course[] }) {
   const [title, setTitle] = useState("")
   const [courseId, setCourseId] = useState(defaultCourseId)
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "project">("easy")
-  const [content, setContent] = useState<string>("") // ✅ 기본 텍스트(글작성) 같은 거 없음
+  const [content, setContent] = useState<string>("") // ✅ 기본 텍스트 없음
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
 
@@ -56,7 +56,7 @@ export default function PostEditor({ courses }: { courses: Course[] }) {
       const data = await res.json().catch(() => ({}))
 
       if (!res.ok) {
-        // ✅ 실패 이유를 바로 보여줌(403이면 ADMIN/env 문제 가능)
+        // ✅ 실패 사유를 그대로 보여주기
         throw new Error(data?.message || `Upload failed (${res.status})`)
       }
 
@@ -74,7 +74,6 @@ export default function PostEditor({ courses }: { courses: Course[] }) {
 
     try {
       const { url, filename } = await uploadFile(file)
-      // ✅ 마크다운이 싫으면 그냥 URL을 넣어도 되지만, 지금 상세가 마크다운 렌더링이라 이게 제일 깔끔
       appendToContent(`![${filename}](${url})`)
     } catch (err: any) {
       alert(err?.message ?? "이미지 업로드 실패")
@@ -108,6 +107,7 @@ export default function PostEditor({ courses }: { courses: Course[] }) {
           title,
           courseId: Number(courseId),
           type: "lesson",
+          // DB가 hard를 쓰는 경우를 고려
           difficulty: difficulty === "project" ? "hard" : difficulty,
           content,
         }),
@@ -129,13 +129,58 @@ export default function PostEditor({ courses }: { courses: Course[] }) {
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <Card className="bg-card border-border">
-        <CardHeader className="flex flex-row items-center justify-between">
-          {/* ✅ “글작성” 텍스트 제거: 타이틀 안 둠 */}
-          <div className="text-sm text-muted-foreground">
-            마크다운/텍스트로 작성하면 상세페이지에서 보기 좋게 렌더링됩니다.
+        <CardContent className="space-y-4 pt-6">
+          {/* 제목 */}
+          <div className="space-y-2">
+            <div className="text-sm text-muted-foreground">제목</div>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="예: Java 기초 문법"
+            />
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* 과목/난이도 (라벨-드롭다운 간격 좁힘) */}
+          <div className="grid gap-3 sm:grid-cols-2 items-center">
+            {/* 과목 */}
+            <div className="flex items-center gap-2">
+              <div className="text-sm text-muted-foreground">과목</div>
+              <div className="w-[180px]">
+                <Select value={courseId} onValueChange={setCourseId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="과목 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {courses.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* 난이도 (오른쪽 끝) */}
+            <div className="flex items-center gap-2 justify-end">
+              <div className="text-sm text-muted-foreground">난이도</div>
+              <div className="w-[160px]">
+                <Select value={difficulty} onValueChange={(v) => setDifficulty(v as any)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="난이도 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="easy">easy</SelectItem>
+                    <SelectItem value="medium">medium</SelectItem>
+                    <SelectItem value="project">project</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          {/* ✅ 버튼 내리기: 과목/난이도 아래 */}
+          <div className="flex justify-end gap-2">
             <input
               ref={imageInputRef}
               type="file"
@@ -171,57 +216,6 @@ export default function PostEditor({ courses }: { courses: Course[] }) {
               {uploading ? "업로드..." : "파일 첨부"}
             </Button>
           </div>
-        </CardHeader>
-
-        <CardContent className="space-y-4">
-          {/* 제목 */}
-          <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">제목</div>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="예: Java 기초 문법"
-            />
-          </div>
-
-          {/* ✅ 과목/난이도: 라벨+드롭다운 나란히 / 난이도는 오른쪽 끝 */}
-          <div className="grid gap-3 sm:grid-cols-2 items-center">
-            {/* 과목 */}
-            <div className="flex items-center gap-3">
-              <div className="w-12 text-sm text-muted-foreground">과목</div>
-              <div className="flex-1">
-                <Select value={courseId} onValueChange={setCourseId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="과목 선택" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {courses.map((c) => (
-                      <SelectItem key={c.id} value={String(c.id)}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* 난이도 (맨 오른쪽 정렬) */}
-            <div className="flex items-center gap-3 justify-end">
-              <div className="w-12 text-sm text-muted-foreground text-right">난이도</div>
-              <div className="w-[160px]">
-                <Select value={difficulty} onValueChange={(v) => setDifficulty(v as any)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="난이도 선택" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="easy">easy</SelectItem>
-                    <SelectItem value="medium">medium</SelectItem>
-                    <SelectItem value="project">project</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
 
           <Tabs defaultValue="edit" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
@@ -233,7 +227,7 @@ export default function PostEditor({ courses }: { courses: Course[] }) {
               <Textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                className="min-h-[520px] font-mono"
+                className="min-h-[520px]"
                 placeholder="여기에 내용을 작성하세요. (이미지/파일 첨부 버튼을 누르면 링크가 자동으로 들어갑니다)"
               />
             </TabsContent>
@@ -253,10 +247,8 @@ export default function PostEditor({ courses }: { courses: Course[] }) {
 
       {/* 미리보기 */}
       <Card className="bg-card border-border">
-        <CardHeader>
-          <div className="text-sm font-medium">실시간 미리보기</div>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
+          <div className="text-sm font-medium mb-3">실시간 미리보기</div>
           <div className="prose prose-invert max-w-none rounded-md border border-border p-4">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
           </div>

@@ -9,30 +9,32 @@ export default function PostAdminActions({
   afterDeleteHref,
   size = "sm",
 }: {
-  postId: number
+  postId: string // ✅ string으로 고정 (NaN/BigInt 깨짐 방지)
   editHref: string
   afterDeleteHref: string
   size?: "sm" | "default"
 }) {
   const router = useRouter()
 
-  function stop(e: React.MouseEvent) {
+  function kill(e: React.SyntheticEvent) {
     e.preventDefault()
     e.stopPropagation()
   }
 
   async function onEdit(e: React.MouseEvent) {
-    stop(e)
+    kill(e)
     router.push(editHref)
   }
 
   async function onDelete(e: React.MouseEvent) {
-    stop(e)
+    kill(e)
+
     const ok = confirm("정말 삭제할까요?")
     if (!ok) return
 
-    const res = await fetch(`/api/posts/${postId}`, { method: "DELETE" })
+    const res = await fetch(`/api/posts/${encodeURIComponent(postId)}`, { method: "DELETE" })
     const data = await res.json().catch(() => ({}))
+
     if (!res.ok) {
       alert(data?.message ?? `삭제 실패 (${res.status})`)
       return
@@ -43,7 +45,11 @@ export default function PostAdminActions({
   }
 
   return (
-    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="flex items-center gap-2"
+      onMouseDown={kill as any}
+      onClick={kill as any}
+    >
       <Button variant="secondary" size={size} onClick={onEdit}>
         수정
       </Button>
