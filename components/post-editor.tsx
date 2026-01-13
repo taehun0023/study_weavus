@@ -41,7 +41,7 @@ export default function PostEditor({
       const fd = new FormData()
       fd.append("file", file)
 
-      const res = await fetch("/api/uploads", { method: "POST", body: fd })
+      const res = await fetch("/api/upload", { method: "POST", body: fd })
       const data = await res.json().catch(() => ({} as any))
 
       if (!res.ok) {
@@ -51,7 +51,7 @@ export default function PostEditor({
 
       const url = data?.url as string | undefined
       if (!url) {
-        alert("Upload succeeded but no url was returned from /api/uploads")
+        alert("Upload succeeded but no url was returned from /api/upload")
         return
       }
 
