@@ -175,7 +175,7 @@ export default async function PostDetailPage({ params }: { params: ParamsLike })
                   )}
                 </div>
               </div>
-            )}
+            )     }
           </CardContent>
         </Card>
       </div>
