@@ -19,7 +19,7 @@ export default function HeaderUserBar({ user }: { user: AuthUser }) {
       {/* ✅ username 왼쪽에 글작성(ADMIN만) */}
       {user.user_role === "ADMIN" && (
         <Button asChild variant="secondary" size="sm">
-          <Link href="/admin/posts/new">글작성</Link>
+          <Link href="/posts/new">글작성</Link>
         </Button>
       )}
 
