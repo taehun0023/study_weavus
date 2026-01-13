@@ -5,7 +5,6 @@ import { getCurrentUser } from "@/lib/auth"
 type Ctx = { params: { postId: string } }
 
 function parseId(raw: string) {
-  // "1", "001", "1?x=y"(없지만 방어) 같은 케이스 방어
   const id = parseInt(String(raw), 10)
   if (!Number.isFinite(id) || id <= 0) return null
   return id
@@ -31,10 +30,13 @@ export async function PUT(req: Request, { params }: Ctx) {
   const id = parseId(params.postId)
   if (!id) return NextResponse.json({ message: "Invalid postId" }, { status: 400 })
 
-  const body = await req.json()
+  const body = await req.json().catch(() => ({} as any))
   const title = String(body.title ?? "").trim()
   const content = String(body.content ?? "").trim()
-  const difficulty = body.difficulty ?? null
+  const difficulty = (body.difficulty ?? null) as "easy" | "medium" | "hard" | "project" | null
+
+  const courseIdRaw = Number(body.courseId ?? NaN)
+  const courseId = Number.isFinite(courseIdRaw) && courseIdRaw > 0 ? courseIdRaw : null
 
   if (!title) return NextResponse.json({ message: "title is required" }, { status: 400 })
 
@@ -42,7 +44,8 @@ export async function PUT(req: Request, { params }: Ctx) {
     UPDATE public.posts
     SET title = ${title},
         content = ${content},
-        difficulty = ${difficulty}
+        difficulty = ${difficulty},
+        course_id = COALESCE(${courseId}, course_id)
     WHERE id = ${id}
     RETURNING id
   `
