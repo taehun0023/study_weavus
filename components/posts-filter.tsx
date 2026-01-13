@@ -44,10 +44,7 @@ export function PostsFilter({
     params.set("course", course)
 
     const diff =
-      next.difficulty ??
-      params.get("difficulty") ??
-      currentDifficulty ??
-      "all"
+      next.difficulty ?? params.get("difficulty") ?? currentDifficulty ?? "all"
 
     if (!diff || diff === "all") params.delete("difficulty")
     else params.set("difficulty", diff)

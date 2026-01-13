@@ -83,7 +83,6 @@ export async function PostsList({
           <Card className="bg-card border-border hover:border-primary/50 transition-colors cursor-pointer h-full">
             <CardHeader className="pb-2">
               <div className="flex flex-wrap items-center gap-2">
-                {/* ✅ 일람은 수업내용만 */}
                 <Badge variant="outline">수업내용</Badge>
 
                 {row.difficulty && (
@@ -92,6 +91,7 @@ export async function PostsList({
                   </Badge>
                 )}
               </div>
+
               <CardTitle className="mt-2">{row.title}</CardTitle>
             </CardHeader>
 
