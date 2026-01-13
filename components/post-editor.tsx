@@ -20,16 +20,64 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 type Course = { id: number; name: string; slug: string }
 
+function isImageFile(file: File) {
+  return file.type.startsWith("image/")
+}
+
 export default function PostEditor({ courses }: { courses: Course[] }) {
   const router = useRouter()
-
   const defaultCourseId = useMemo(() => courses?.[0]?.id?.toString() ?? "", [courses])
 
   const [title, setTitle] = useState("")
   const [courseId, setCourseId] = useState(defaultCourseId)
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "project">("easy")
-  const [content, setContent] = useState(`# 제목\n\n- 여기에 내용을 작성하세요.\n\n## 코드\n\n\`\`\`java\npublic class Main {\n  public static void main(String[] args) {\n    System.out.println("Hello");\n  }\n}\n\`\`\`\n`)
+  const [content, setContent] = useState<string>(
+    `# 제목\n\n- 여기에 내용을 작성하세요.\n\n## 코드\n\n\`\`\`java\npublic class Main {\n  public static void main(String[] args) {\n    System.out.println("Hello");\n  }\n}\n\`\`\`\n`
+  )
   const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+
+  function insertAtCursor(text: string) {
+    setContent((prev) => prev + (prev.endsWith("\n") ? "" : "\n") + text + "\n")
+  }
+
+  async function uploadFile(file: File) {
+    setUploading(true)
+    try {
+      const form = new FormData()
+      form.append("file", file)
+
+      const res = await fetch("/api/upload", { method: "POST", body: form })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.message ?? "Upload failed")
+
+      return { url: data.url as string, filename: data.filename as string }
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function onPickImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file) return
+    if (!isImageFile(file)) {
+      alert("이미지 파일만 선택하세요.")
+      return
+    }
+
+    const { url, filename } = await uploadFile(file)
+    insertAtCursor(`![${filename}](${url})`)
+  }
+
+  async function onPickAttachment(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file) return
+
+    const { url, filename } = await uploadFile(file)
+    insertAtCursor(`[${filename}](${url})`)
+  }
 
   async function onSubmit() {
     if (!title.trim()) return alert("제목을 입력하세요.")
@@ -43,9 +91,7 @@ export default function PostEditor({ courses }: { courses: Course[] }) {
         body: JSON.stringify({
           title,
           courseId: Number(courseId),
-          // ✅ 일람은 수업내용만 보이게 할 거라 기본 type=lesson
           type: "lesson",
-          // ✅ DB에 hard가 이미 쓰이고 있으면 project는 hard로 저장해도 됨
           difficulty: difficulty === "project" ? "hard" : difficulty,
           content,
         }),
@@ -67,9 +113,39 @@ export default function PostEditor({ courses }: { courses: Course[] }) {
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <Card className="bg-card border-border">
-        <CardHeader>
-          <CardTitle>작성</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>글 작성</CardTitle>
+
+          <div className="flex items-center gap-2">
+            {/* 이미지 업로드 */}
+            <label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={onPickImage}
+                className="hidden"
+                disabled={uploading || loading}
+              />
+              <Button type="button" variant="secondary" size="sm" disabled={uploading || loading}>
+                {uploading ? "업로드..." : "이미지 첨부"}
+              </Button>
+            </label>
+
+            {/* 파일 업로드 */}
+            <label>
+              <input
+                type="file"
+                onChange={onPickAttachment}
+                className="hidden"
+                disabled={uploading || loading}
+              />
+              <Button type="button" variant="outline" size="sm" disabled={uploading || loading}>
+                {uploading ? "업로드..." : "파일 첨부"}
+              </Button>
+            </label>
+          </div>
         </CardHeader>
+
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <div className="text-sm text-muted-foreground">제목</div>
@@ -108,6 +184,7 @@ export default function PostEditor({ courses }: { courses: Course[] }) {
             </div>
           </div>
 
+          {/* ✅ “작성” 같은 불필요한 글씨 제거: 탭은 편집/미리보기만 */}
           <Tabs defaultValue="edit" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="edit">편집</TabsTrigger>
@@ -118,11 +195,11 @@ export default function PostEditor({ courses }: { courses: Course[] }) {
               <Textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                className="min-h-[420px] font-mono"
+                className="min-h-[460px] font-mono"
                 placeholder="마크다운으로 작성하세요"
               />
               <div className="text-xs text-muted-foreground">
-                팁: 제목은 `#`, 소제목은 `##`, 코드블록은 ```java 처럼 작성
+                이미지/파일 첨부 버튼을 누르면 마크다운 링크가 본문에 자동으로 들어갑니다.
               </div>
             </TabsContent>
 
@@ -133,7 +210,7 @@ export default function PostEditor({ courses }: { courses: Course[] }) {
             </TabsContent>
           </Tabs>
 
-          <Button onClick={onSubmit} disabled={loading} className="w-full">
+          <Button onClick={onSubmit} disabled={loading || uploading} className="w-full">
             {loading ? "저장 중..." : "저장하기"}
           </Button>
         </CardContent>

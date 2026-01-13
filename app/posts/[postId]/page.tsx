@@ -56,15 +56,21 @@ function difficultyClass(d: Difficulty): string {
   return ""
 }
 
+type ParamsShape = { postId?: string }
+
 export default async function PostDetailPage({
   params,
 }: {
-  params: { postId: string }
+  // ✅ params가 Promise로 들어오는 경우까지 대응
+  params: ParamsShape | Promise<ParamsShape>
 }) {
   const user = await getCurrentUser()
   if (!user) redirect("/login")
 
-  const postId = Number(params.postId)
+  const p: ParamsShape = (params ? await params : {}) ?? {}
+  const rawId = p.postId
+
+  const postId = Number.parseInt(String(rawId ?? ""), 10)
   if (!Number.isFinite(postId) || postId <= 0) {
     return (
       <div className="min-h-screen bg-background">
@@ -107,7 +113,7 @@ export default async function PostDetailPage({
     )
   }
 
-  // DB에 "\n"이 아니라 "\\n" 문자열로 들어간 케이스 보정
+  // DB에 "\\n"이 들어간 경우 보정 (줄바꿈 깨짐 방지)
   const raw = post.content ?? ""
   const content = raw.includes("\\n") ? raw.replace(/\\n/g, "\n") : raw
 
@@ -116,7 +122,6 @@ export default async function PostDetailPage({
       <DashboardHeader user={user} />
 
       <main className="container mx-auto px-4 py-8 space-y-6">
-        {/* 상단 바: 목록으로 + 배지들 */}
         <div className="flex flex-wrap items-center gap-2">
           <Button asChild variant="ghost" size="sm" className="pl-0">
             <Link href={`/posts?course=${post.course_slug}`}>← 목록으로</Link>
@@ -132,7 +137,6 @@ export default async function PostDetailPage({
           )}
         </div>
 
-        {/* 본문 카드 */}
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="text-2xl">{post.title}</CardTitle>
@@ -143,9 +147,7 @@ export default async function PostDetailPage({
               <div className="text-sm text-muted-foreground">내용이 없습니다.</div>
             ) : (
               <div className="prose prose-invert max-w-none">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {content}
-                </ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
               </div>
             )}
           </CardContent>
