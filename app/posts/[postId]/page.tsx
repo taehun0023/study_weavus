@@ -1,184 +1,156 @@
 // app/posts/[postId]/page.tsx
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+export const fetchCache = "force-no-store"
+
 import Link from "next/link"
 import { redirect } from "next/navigation"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
+
 import { getCurrentUser } from "@/lib/auth"
 import { sql } from "@/lib/db"
-import { Button } from "@/components/ui/button"
+
+import DashboardHeader from "@/components/dashboard-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 
-export const runtime = "nodejs"
+type PostType = "lesson" | "quiz" | "reference"
+type Difficulty = "easy" | "medium" | "hard" | "project" | null
 
 type PostRow = {
   id: number
   title: string
-  content: string
-  type: "lesson" | "quiz" | "reference"
-  difficulty: "easy" | "medium" | "hard" | null
-  course_id: number
+  type: PostType
+  difficulty: Difficulty
+  content: string | null
   course_name: string
   course_slug: string
 }
 
-type RelatedPost = {
-  id: number
-  title: string
-  type: "quiz" | "reference"
+function typeLabel(t: PostType) {
+  if (t === "lesson") return "수업내용"
+  if (t === "quiz") return "문제풀이"
+  return "참고자료"
 }
 
-function normalizeTitleForMatch(title: string) {
-  return title
-    .replace(/\s*(수업내용|강의|이론|문법|개념|정리)\s*$/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
+function normalizedDifficulty(d: Difficulty): "easy" | "medium" | "project" | null {
+  if (!d) return null
+  if (d === "hard" || d === "project") return "project"
+  if (d === "easy") return "easy"
+  if (d === "medium") return "medium"
+  return null
 }
 
-async function findRelated(
-  courseId: number,
-  baseTitle: string,
-  type: "quiz" | "reference"
-): Promise<RelatedPost | null> {
-  const q1 = await sql<RelatedPost>`
-    SELECT id, title, type
-    FROM public.posts
-    WHERE course_id = ${courseId}
-      AND type = ${type}
-      AND title ILIKE ${"%" + baseTitle + "%"}
-    ORDER BY id
-    LIMIT 1
-  `
-  if (q1[0]) return q1[0]
-
-  const q2 = await sql<RelatedPost>`
-    SELECT id, title, type
-    FROM public.posts
-    WHERE course_id = ${courseId}
-      AND type = ${type}
-    ORDER BY id
-    LIMIT 1
-  `
-  return q2[0] ?? null
+function difficultyLabel(d: Difficulty) {
+  const nd = normalizedDifficulty(d)
+  return nd ?? ""
 }
 
-type ParamsLike = { postId: string } | Promise<{ postId: string }>
+function difficultyClass(d: Difficulty): string {
+  const nd = normalizedDifficulty(d)
+  if (nd === "easy") return "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+  if (nd === "medium") return "bg-yellow-500/15 text-yellow-200 border-yellow-500/30"
+  if (nd === "project") return "bg-sky-500/15 text-sky-200 border-sky-500/30"
+  return ""
+}
 
-export default async function PostDetailPage({ params }: { params: ParamsLike }) {
+export default async function PostDetailPage({
+  params,
+}: {
+  params: { postId: string }
+}) {
   const user = await getCurrentUser()
   if (!user) redirect("/login")
 
-  // ✅ params가 Promise든 아니든 안전하게 처리
-  const { postId: postIdRaw } = await params
-  const postId = Number.parseInt(postIdRaw, 10)
-
-  // 여기서 NaN이면 /posts/1 이라도 코드 문제(대부분 params 처리 문제)
-  if (!Number.isInteger(postId)) {
+  const postId = Number(params.postId)
+  if (!Number.isFinite(postId) || postId <= 0) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center px-4">
-        <Card className="w-full max-w-md border-border bg-card">
-          <CardHeader>
-            <CardTitle className="text-red-500">잘못된 postId 입니다!</CardTitle>
-          </CardHeader>
-          <CardContent className="flex gap-2 justify-end">
-            <Button asChild variant="secondary">
-              <Link href="/posts">목록으로</Link>
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-background">
+        <DashboardHeader user={user} />
+        <main className="container mx-auto px-4 py-10">
+          <div className="rounded-lg border border-border bg-card p-6 text-sm text-destructive">
+            잘못된 postId 입니다!
+          </div>
+        </main>
       </div>
     )
   }
 
   const rows = await sql<PostRow>`
-    SELECT 
+    SELECT
       p.id,
       p.title,
-      p.content,
       p.type,
       p.difficulty,
-      p.course_id,
+      p.content,
       c.name as course_name,
       c.slug as course_slug
     FROM public.posts p
-    JOIN public.courses c ON c.id = p.course_id
+    JOIN public.courses c ON p.course_id = c.id
     WHERE p.id = ${postId}
     LIMIT 1
   `
-  const post = rows[0]
 
-  // 글이 진짜 없으면 여기로 옴 (invalid postId 메시지랑 원인이 다름)
-  if (!post) redirect("/posts")
-
-  let relatedQuiz: RelatedPost | null = null
-  let relatedRef: RelatedPost | null = null
-
-  if (post.type === "lesson") {
-    const base = normalizeTitleForMatch(post.title)
-    relatedQuiz = await findRelated(post.course_id, base, "quiz")
-    relatedRef = await findRelated(post.course_id, base, "reference")
+  const post = rows?.[0]
+  if (!post) {
+    return (
+      <div className="min-h-screen bg-background">
+        <DashboardHeader user={user} />
+        <main className="container mx-auto px-4 py-10">
+          <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
+            게시글을 찾을 수 없습니다.
+          </div>
+        </main>
+      </div>
+    )
   }
+
+  // DB에 "\n"이 아니라 "\\n" 문자열로 들어간 케이스 보정
+  const raw = post.content ?? ""
+  const content = raw.includes("\\n") ? raw.replace(/\\n/g, "\n") : raw
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-4xl px-4 py-8">
-        <div className="mb-6 flex items-center gap-3">
-          <Button asChild variant="ghost">
-            <Link href="/posts">← 목록으로</Link>
+      <DashboardHeader user={user} />
+
+      <main className="container mx-auto px-4 py-8 space-y-6">
+        {/* 상단 바: 목록으로 + 배지들 */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button asChild variant="ghost" size="sm" className="pl-0">
+            <Link href={`/posts?course=${post.course_slug}`}>← 목록으로</Link>
           </Button>
 
-          <div className="flex items-center gap-2">
-            <Badge variant="outline">
-              {post.type === "lesson"
-                ? "수업내용"
-                : post.type === "reference"
-                ? "참고자료"
-                : "문제풀이"}
+          <Badge variant="outline">{typeLabel(post.type)}</Badge>
+          <Badge variant="secondary">{post.course_name}</Badge>
+
+          {post.difficulty && (
+            <Badge variant="outline" className={difficultyClass(post.difficulty)}>
+              {difficultyLabel(post.difficulty)}
             </Badge>
-            <Badge variant="secondary">{post.course_name}</Badge>
-          </div>
+          )}
         </div>
 
+        {/* 본문 카드 */}
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="text-2xl">{post.title}</CardTitle>
           </CardHeader>
 
-          <CardContent className="space-y-6">
-            <div className="text-foreground whitespace-pre-wrap leading-7">
-              {post.content}
-            </div>
-
-            {post.type === "lesson" && (
-              <div className="space-y-3 pt-2">
-                <div className="text-sm text-muted-foreground">
-                  수업내용을 학습한 뒤, 참고자료를 보고 문제풀이로 확인하세요.
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-2">
-                  {relatedRef ? (
-                    <Button asChild variant="secondary" className="w-full sm:w-auto">
-                      <Link href={`/posts/${relatedRef.id}`}>참고자료 보기</Link>
-                    </Button>
-                  ) : (
-                    <Button disabled variant="secondary" className="w-full sm:w-auto">
-                      참고자료 없음
-                    </Button>
-                  )}
-
-                  {relatedQuiz ? (
-                    <Button asChild className="w-full sm:w-auto">
-                      <Link href={`/quiz/${relatedQuiz.id}`}>문제풀이 하러가기</Link>
-                    </Button>
-                  ) : (
-                    <Button disabled className="w-full sm:w-auto">
-                      문제풀이 없음
-                    </Button>
-                  )}
-                </div>
+          <CardContent>
+            {content.trim().length === 0 ? (
+              <div className="text-sm text-muted-foreground">내용이 없습니다.</div>
+            ) : (
+              <div className="prose prose-invert max-w-none">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {content}
+                </ReactMarkdown>
               </div>
-            )     }
+            )}
           </CardContent>
         </Card>
-      </div>
+      </main>
     </div>
   )
 }

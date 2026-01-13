@@ -1,5 +1,6 @@
 import Link from "next/link"
 import type { AuthUser } from "@/lib/auth"
+import HeaderUserBar from "./header-user-bar"
 
 export type DashboardHeaderProps = {
   user: AuthUser
@@ -7,17 +8,14 @@ export type DashboardHeaderProps = {
 
 export default function DashboardHeader({ user }: DashboardHeaderProps) {
   return (
-    <header className="border-b border-border bg-background">
+    <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur">
       <div className="container mx-auto flex items-center justify-between px-4 py-4">
         <Link href="/" className="text-lg font-semibold">
           Study
         </Link>
 
-        <div className="flex items-center gap-3 text-sm">
-          <span className="text-muted-foreground">
-            {user.display_name} ({user.username})
-          </span>
-        </div>
+        {/* ✅ 유저 + 글작성 + 로그아웃 */}
+        <HeaderUserBar user={user} />
       </div>
     </header>
   )
