@@ -1,6 +1,7 @@
 // app/posts/page.tsx
 export const dynamic = "force-dynamic"
 export const revalidate = 0
+export const fetchCache = "force-no-store"
 
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth"
@@ -49,10 +50,11 @@ export default async function PostsPage({ searchParams }: PostsPageProps) {
           />
         </div>
 
+        {/* ✅ 일람은 수업내용만 보여줄 거라 lessonOnly 켬 */}
         <PostsList
-          userId={user.id}
           courseSlug={currentCourse}
           difficultyFilter={currentDifficulty}
+          lessonOnly
         />
       </main>
     </div>

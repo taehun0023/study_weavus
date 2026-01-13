@@ -37,14 +37,18 @@ export function PostsFilter({
     return courses
   }, [courses])
 
-  function push(next: Record<string, string | null | undefined>) {
+  function push(next: { course?: string; difficulty?: string }) {
     const params = new URLSearchParams(searchParams.toString())
 
     const course = next.course ?? params.get("course") ?? currentCourse ?? "java"
     params.set("course", course)
 
     const diff =
-      next.difficulty ?? params.get("difficulty") ?? currentDifficulty ?? "all"
+      next.difficulty ??
+      params.get("difficulty") ??
+      currentDifficulty ??
+      "all"
+
     if (!diff || diff === "all") params.delete("difficulty")
     else params.set("difficulty", diff)
 
@@ -54,7 +58,6 @@ export function PostsFilter({
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      {/* 왼쪽: 과목 드롭다운 */}
       <Select value={currentCourse} onValueChange={(v) => push({ course: v })}>
         <SelectTrigger className="w-full sm:w-[180px]">
           <SelectValue placeholder="과목 선택" />
@@ -68,7 +71,6 @@ export function PostsFilter({
         </SelectContent>
       </Select>
 
-      {/* 오른쪽: 난이도 필터 */}
       <ToggleGroup
         type="single"
         value={currentDifficulty}

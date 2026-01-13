@@ -4,21 +4,13 @@ import { sql } from "@/lib/db"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 
-type PostType = "lesson" | "quiz" | "reference"
 type Difficulty = "easy" | "medium" | "hard" | "project" | null
 
 type PostRow = {
   id: number
   title: string
-  type: PostType
   difficulty: Difficulty
   course_name: string
-}
-
-function typeLabel(t: PostType): string {
-  if (t === "lesson") return "수업내용"
-  if (t === "quiz") return "문제풀이"
-  return "참고자료"
 }
 
 function difficultyLabel(d: Difficulty): string {
@@ -27,30 +19,43 @@ function difficultyLabel(d: Difficulty): string {
   return d
 }
 
-function makeHref(row: PostRow): string {
-  // quiz는 /quiz로 보내고, 나머지는 /posts 상세로
-  return row.type === "quiz" ? `/quiz/${row.id}` : `/posts/${row.id}`
+function normalizedDifficulty(d: Difficulty): "easy" | "medium" | "project" | null {
+  if (!d) return null
+  if (d === "hard" || d === "project") return "project"
+  if (d === "easy") return "easy"
+  if (d === "medium") return "medium"
+  return null
+}
+
+function difficultyClass(d: Difficulty): string {
+  const nd = normalizedDifficulty(d)
+  if (nd === "easy") return "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+  if (nd === "medium") return "bg-yellow-500/15 text-yellow-200 border-yellow-500/30"
+  if (nd === "project") return "bg-sky-500/15 text-sky-200 border-sky-500/30"
+  return ""
 }
 
 export async function PostsList({
-  userId, // 향후 권한/진도관리용. 현재 미사용
   courseSlug,
   difficultyFilter = "all",
+  lessonOnly = false,
 }: {
-  userId: number
   courseSlug: string
   difficultyFilter?: string
+  lessonOnly?: boolean
 }) {
   const rows = await sql<PostRow>`
     SELECT 
       p.id,
       p.title,
-      p.type,
       p.difficulty,
       c.name as course_name
     FROM public.posts p
     JOIN public.courses c ON p.course_id = c.id
     WHERE c.slug = ${courseSlug}
+      AND (
+        ${lessonOnly} = false OR p.type = 'lesson'
+      )
       AND (
         ${difficultyFilter} = 'all'
         OR (
@@ -74,17 +79,22 @@ export async function PostsList({
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {rows.map((row) => (
-        <Link key={row.id} href={makeHref(row)} prefetch className="block">
+        <Link key={row.id} href={`/posts/${row.id}`} className="block">
           <Card className="bg-card border-border hover:border-primary/50 transition-colors cursor-pointer h-full">
             <CardHeader className="pb-2">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">{typeLabel(row.type)}</Badge>
+                {/* ✅ 일람은 수업내용만 */}
+                <Badge variant="outline">수업내용</Badge>
+
                 {row.difficulty && (
-                  <Badge variant="secondary">{difficultyLabel(row.difficulty)}</Badge>
+                  <Badge variant="outline" className={difficultyClass(row.difficulty)}>
+                    {difficultyLabel(row.difficulty)}
+                  </Badge>
                 )}
               </div>
               <CardTitle className="mt-2">{row.title}</CardTitle>
             </CardHeader>
+
             <CardContent className="text-sm text-muted-foreground">
               과목: {row.course_name}
             </CardContent>
