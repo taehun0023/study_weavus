@@ -44,6 +44,7 @@ export default function PostEditForm({
       <CardHeader>
         <CardTitle>게시글 수정</CardTitle>
       </CardHeader>
+
       <CardContent className="space-y-4">
         <div>
           <div className="text-sm text-muted-foreground mb-2">제목</div>
@@ -54,7 +55,9 @@ export default function PostEditForm({
           <div className="text-sm text-muted-foreground">난이도</div>
           <div className="w-[160px]">
             <Select value={difficulty} onValueChange={setDifficulty}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="easy">easy</SelectItem>
                 <SelectItem value="medium">medium</SelectItem>
@@ -67,7 +70,11 @@ export default function PostEditForm({
 
         <div>
           <div className="text-sm text-muted-foreground mb-2">내용</div>
-          <Textarea className="min-h-[420px]" value={content} onChange={(e) => setContent(e.target.value)} />
+          <Textarea
+            className="min-h-[420px]"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+          />
         </div>
 
         <Button className="w-full" onClick={onSave} disabled={saving}>
