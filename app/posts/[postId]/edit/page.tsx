@@ -11,9 +11,8 @@ import PostEditor from "@/components/post-editor"
 
 type Params = { postId: string }
 type CourseRow = { id: number; name: string; slug: string }
-
 type DbDifficulty = "easy" | "medium" | "hard" | "project" | null
-type EditorDifficulty = "easy" | "medium" | "project" | null
+type EditorDifficulty = "easy" | "medium" | "project"
 
 type PostRow = {
   id: number
@@ -24,12 +23,9 @@ type PostRow = {
 }
 
 function toEditorDifficulty(d: DbDifficulty): EditorDifficulty {
-  if (!d) return null
-  if (d === "hard") return "project"
-  if (d === "project") return "project"
-  if (d === "easy") return "easy"
   if (d === "medium") return "medium"
-  return null
+  if (d === "project" || d === "hard") return "project"
+  return "easy"
 }
 
 export default async function EditPostPage({ params }: { params: Params }) {
@@ -37,8 +33,8 @@ export default async function EditPostPage({ params }: { params: Params }) {
   if (!user) redirect("/login")
   if (user.user_role !== "ADMIN") redirect("/posts")
 
-  const postId = Number.parseInt(params.postId, 10)
-  if (!Number.isFinite(postId) || postId <= 0) redirect("/posts")
+  const id = Number.parseInt(params.postId, 10)
+  if (!Number.isFinite(id) || id <= 0) redirect("/posts")
 
   const courses = await sql<CourseRow>`
     SELECT id, name, slug
@@ -49,12 +45,14 @@ export default async function EditPostPage({ params }: { params: Params }) {
   const rows = await sql<PostRow>`
     SELECT id, title, content, difficulty, course_id
     FROM public.posts
-    WHERE id = ${postId}
+    WHERE id = ${id}
     LIMIT 1
   `
   const post = rows?.[0]
   if (!post) redirect("/posts")
 
+  // PostEditor가 초기값을 못 받는 구조라서, 아래 1줄이 중요:
+  // PostEditor에 initial 값을 받도록 바꿔야 함 (다음 코드 C에서 제공)
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader user={user} />
@@ -63,13 +61,24 @@ export default async function EditPostPage({ params }: { params: Params }) {
 
         <PostEditor
           courses={courses}
-          mode="edit"
-          postId={String(post.id)}
           initial={{
             title: post.title ?? "",
             courseId: post.course_id,
             difficulty: toEditorDifficulty(post.difficulty),
             content: post.content ?? "",
+          }}
+          onSubmit={async (payload) => {
+            const res = await fetch(`/api/posts/${id}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) {
+              alert(data?.message ?? `수정 실패 (${res.status})`)
+              return
+            }
+            location.href = `/posts/${id}`
           }}
         />
       </main>

@@ -5,7 +5,7 @@ export const fetchCache = "force-no-store"
 
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import DOMPurify from "isomorphic-dompurify"
+import sanitizeHtml from "sanitize-html"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 
@@ -29,11 +29,9 @@ type PostRow = {
   content: string | null
   course_name: string
   course_slug: string
-  author_id?: number | null
 }
 
 type RelatedRow = { id: number }
-
 type ParamsShape = { postId?: string }
 
 function typeLabel(t: PostType) {
@@ -50,10 +48,6 @@ function normalizedDifficulty(d: Difficulty): "easy" | "medium" | "project" | nu
   return null
 }
 
-function difficultyLabel(d: Difficulty) {
-  return normalizedDifficulty(d) ?? ""
-}
-
 function difficultyClass(d: Difficulty): string {
   const nd = normalizedDifficulty(d)
   if (nd === "easy") return "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
@@ -63,21 +57,14 @@ function difficultyClass(d: Difficulty): string {
 }
 
 function looksLikeHtml(s: string) {
-  // tiptap은 보통 <p>, <h1>, <img> 같은 태그가 포함됨
   return /<\/?[a-z][\s\S]*>/i.test(s)
 }
 
-export default async function PostDetailPage({
-  params,
-}: {
-  params: ParamsShape | Promise<ParamsShape>
-}) {
+export default async function PostDetailPage({ params }: { params: ParamsShape }) {
   const user = await getCurrentUser()
   if (!user) redirect("/login")
 
-  const p: ParamsShape = (params ? await params : {}) ?? {}
-  const postId = Number.parseInt(String(p.postId ?? ""), 10)
-
+  const postId = Number.parseInt(String(params?.postId ?? ""), 10)
   if (!Number.isFinite(postId) || postId <= 0) {
     return (
       <div className="min-h-screen bg-background">
@@ -121,15 +108,22 @@ export default async function PostDetailPage({
     )
   }
 
-  // DB에 "\\n" 형태로 들어간 경우 보정
   const raw = post.content ?? ""
   const fixed = raw.includes("\\n") ? raw.replace(/\\n/g, "\n") : raw
 
-  // tiptap(HTML) / 기존 markdown 모두 렌더링 지원
   const isHtml = looksLikeHtml(fixed)
-  const safeHtml = isHtml ? DOMPurify.sanitize(fixed) : ""
+  const safeHtml = isHtml
+    ? sanitizeHtml(fixed, {
+        allowedTags: sanitizeHtml.defaults.allowedTags.concat(["img"]),
+        allowedAttributes: {
+          a: ["href", "name", "target", "rel"],
+          img: ["src", "alt", "title", "width", "height"],
+          "*": ["style"],
+        },
+        allowedSchemes: ["http", "https", "data"],
+      })
+    : ""
 
-  // 같은 과목(course)에서 최신 reference/quiz 버튼 제공
   const [ref] = await sql<RelatedRow>`
     SELECT id
     FROM public.posts
@@ -164,7 +158,7 @@ export default async function PostDetailPage({
 
           {post.difficulty && (
             <Badge variant="outline" className={difficultyClass(post.difficulty)}>
-              {difficultyLabel(post.difficulty)}
+              {normalizedDifficulty(post.difficulty)}
             </Badge>
           )}
 

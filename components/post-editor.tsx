@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
@@ -8,52 +8,49 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 
-import { EditorContent, useEditor } from "@tiptap/react"
+import { useEditor, EditorContent } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import Image from "@tiptap/extension-image"
 import Link from "@tiptap/extension-link"
 import Placeholder from "@tiptap/extension-placeholder"
 import Underline from "@tiptap/extension-underline"
 
-type Difficulty = "easy" | "medium" | "hard" | "project" | null
-
-type Course = {
-  id: number
-  name: string
-  slug: string
-}
-
-type InitialPost = {
-  title: string
-  courseId: number
-  difficulty: Difficulty
-  content: string
-}
+type Course = { id: number; name: string; slug: string }
+type Difficulty = "easy" | "medium" | "project"
 
 export default function PostEditor({
   courses,
-  mode = "create",
-  postId,
   initial,
+  onSubmit,
 }: {
   courses: Course[]
-  mode?: "create" | "edit"
-  postId?: string
-  initial?: Partial<InitialPost>
+  initial?: {
+    title: string
+    courseId: number
+    difficulty: Difficulty
+    content: string
+  }
+  onSubmit?: (payload: {
+    title: string
+    courseId: number
+    difficulty: Difficulty
+    content: string
+  }) => Promise<void>
 }) {
   const router = useRouter()
-  const imgRef = useRef<HTMLInputElement | null>(null)
-  const fileRef = useRef<HTMLInputElement | null>(null)
 
   const safeCourses = Array.isArray(courses) ? courses : []
+  const initialCourseId = initial?.courseId ?? safeCourses[0]?.id ?? 0
 
   const [title, setTitle] = useState(initial?.title ?? "")
-  const [courseId, setCourseId] = useState<number>(initial?.courseId ?? (safeCourses[0]?.id ?? 0))
-  const [difficulty, setDifficulty] = useState<Difficulty>(initial?.difficulty ?? null)
+  const [courseId, setCourseId] = useState<number>(initialCourseId)
+  const [difficulty, setDifficulty] = useState<Difficulty>(initial?.difficulty ?? "easy")
   const [content, setContent] = useState<string>(initial?.content ?? "")
-
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState<null | "image" | "file">(null)
+
+  const imgRef = useRef<HTMLInputElement | null>(null)
+  const fileRef = useRef<HTMLInputElement | null>(null)
 
   const editor = useEditor({
     extensions: [
@@ -61,21 +58,15 @@ export default function PostEditor({
         heading: { levels: [1, 2, 3] },
       }),
       Underline,
-      Image.configure({
-        inline: false,
-        allowBase64: false,
-      }),
+      Image.configure({ inline: false, allowBase64: false }),
       Link.configure({
         openOnClick: true,
         autolink: true,
         linkOnPaste: true,
-        HTMLAttributes: {
-          rel: "noreferrer",
-          target: "_blank",
-        },
+        HTMLAttributes: { rel: "noreferrer", target: "_blank" },
       }),
       Placeholder.configure({
-        placeholder: "내용을 입력하세요…",
+        placeholder: "",
       }),
     ],
     content: initial?.content ?? "",
@@ -90,24 +81,19 @@ export default function PostEditor({
     },
   })
 
-  const canSubmit = useMemo(() => {
-    const hasTitle = title.trim().length > 0
-    const hasCourse = Number.isFinite(courseId) && courseId > 0
-    const hasEditor = !!editor
-    return hasTitle && hasCourse && hasEditor && !saving && uploading === null
-  }, [title, courseId, editor, saving, uploading])
+  // ✅ initial이 바뀌었을 때(편집페이지) 에디터에도 주입
+  useEffect(() => {
+    if (!editor) return
+    if (initial?.content != null) editor.commands.setContent(initial.content)
+  }, [editor, initial?.content])
 
-  function escapeHtmlText(s: string) {
-    return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
-  }
-  function escapeHtmlAttr(s: string) {
-    return escapeHtmlText(s).replaceAll('"', "&quot;")
-  }
+  const canSubmit = useMemo(() => {
+    return title.trim().length > 0 && courseId !== 0 && !saving && uploading === null
+  }, [title, courseId, saving, uploading])
 
   async function uploadAndInsert(kind: "image" | "file", file: File) {
     if (!editor) return
     setUploading(kind)
-
     try {
       const fd = new FormData()
       fd.append("file", file)
@@ -146,68 +132,47 @@ export default function PostEditor({
     }
   }
 
-  function setLink() {
-    if (!editor) return
-    const prev = (editor.getAttributes("link").href as string | undefined) ?? ""
-    const url = window.prompt("링크 URL", prev)
-    if (url === null) return
-    if (url.trim() === "") {
-      editor.chain().focus().extendMarkRange("link").unsetLink().run()
+  async function defaultSubmit(payload: {
+    title: string
+    courseId: number
+    difficulty: Difficulty
+    content: string
+  }) {
+    const res = await fetch("/api/posts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: payload.title,
+        courseId: payload.courseId,
+        difficulty: payload.difficulty,
+        content: payload.content,
+        type: "lesson",
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      alert(data?.message ?? `저장 실패 (${res.status})`)
       return
     }
-    editor.chain().focus().extendMarkRange("link").setLink({ href: url.trim() }).run()
+    const id = data?.id
+    router.push(id ? `/posts/${id}` : "/posts")
+    router.refresh()
   }
 
-  async function submit() {
-    if (!canSubmit) return
+  async function handleSave() {
+    const t = title.trim()
+    if (!t) return alert("제목을 입력하세요.")
+    if (!courseId) return alert("과목을 선택하세요.")
+
+    const html = editor?.getHTML?.() ?? content
+
     setSaving(true)
     try {
-      const payload = {
-        title: title.trim(),
-        courseId,
-        difficulty,
-        content: content ?? "",
+      if (onSubmit) {
+        await onSubmit({ title: t, courseId, difficulty, content: html })
+      } else {
+        await defaultSubmit({ title: t, courseId, difficulty, content: html })
       }
-
-      if (mode === "edit") {
-        if (!postId) {
-          alert("postId가 없습니다.")
-          return
-        }
-        const res = await fetch(`/api/posts/${encodeURIComponent(postId)}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-        const data = await res.json().catch(() => ({} as any))
-        if (!res.ok) {
-          alert(data?.message ?? `수정 실패 (${res.status})`)
-          return
-        }
-        router.push(`/posts/${postId}`)
-        router.refresh()
-        return
-      }
-
-      const res = await fetch("/api/posts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...payload,
-          type: "lesson",
-        }),
-      })
-
-      const data = await res.json().catch(() => ({} as any))
-      if (!res.ok) {
-        alert(data?.message ?? `저장 실패 (${res.status})`)
-        return
-      }
-
-      const newId = data?.id
-      if (newId) router.push(`/posts/${newId}`)
-      else router.push("/posts")
-      router.refresh()
     } finally {
       setSaving(false)
     }
@@ -216,25 +181,18 @@ export default function PostEditor({
   return (
     <Card className="bg-card border-border">
       <CardContent className="p-6 space-y-4">
-        {/* 제목 */}
         <div className="space-y-2">
           <div className="text-sm text-muted-foreground">제목</div>
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: Java 기초 문법" />
         </div>
 
-        {/* 과목/난이도/첨부 한 줄 */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* 과목 */}
+        <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <div className="text-sm text-muted-foreground">과목</div>
             <div className="w-[160px]">
-              <Select
-                value={String(courseId)}
-                onValueChange={(v) => setCourseId(Number(v))}
-                disabled={safeCourses.length === 0}
-              >
+              <Select value={String(courseId)} onValueChange={(v) => setCourseId(Number(v))}>
                 <SelectTrigger>
-                  <SelectValue placeholder={safeCourses.length ? "선택" : "과목 없음"} />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {safeCourses.map((c) => (
@@ -247,19 +205,16 @@ export default function PostEditor({
             </div>
           </div>
 
-          {/* 난이도 */}
+          <div className="flex-1" />
+
           <div className="flex items-center gap-2">
             <div className="text-sm text-muted-foreground">난이도</div>
             <div className="w-[140px]">
-              <Select
-                value={difficulty ?? "none"}
-                onValueChange={(v) => setDifficulty(v === "none" ? null : (v as any))}
-              >
+              <Select value={difficulty} onValueChange={(v) => setDifficulty(v as Difficulty)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">none</SelectItem>
                   <SelectItem value="easy">easy</SelectItem>
                   <SelectItem value="medium">medium</SelectItem>
                   <SelectItem value="project">project</SelectItem>
@@ -268,7 +223,6 @@ export default function PostEditor({
             </div>
           </div>
 
-          {/* 첨부 */}
           <div className="flex items-center gap-2">
             <input
               ref={imgRef}
@@ -295,78 +249,30 @@ export default function PostEditor({
             <Button type="button" variant="secondary" onClick={() => imgRef.current?.click()} disabled={uploading !== null}>
               {uploading === "image" ? "업로드 중..." : "이미지 첨부"}
             </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading !== null}
-            >
+            <Button type="button" variant="secondary" onClick={() => fileRef.current?.click()} disabled={uploading !== null}>
               {uploading === "file" ? "업로드 중..." : "파일 첨부"}
             </Button>
           </div>
         </div>
 
-        {/* 툴바 */}
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant={editor?.isActive("bold") ? "default" : "secondary"}
-            onClick={() => editor?.chain().focus().toggleBold().run()}
-          >
-            B
-          </Button>
-          <Button
-            type="button"
-            variant={editor?.isActive("italic") ? "default" : "secondary"}
-            onClick={() => editor?.chain().focus().toggleItalic().run()}
-          >
-            I
-          </Button>
-          <Button
-            type="button"
-            variant={editor?.isActive("underline") ? "default" : "secondary"}
-            onClick={() => editor?.chain().focus().toggleUnderline().run()}
-          >
-            U
-          </Button>
+        <div>{editor ? <EditorContent editor={editor} /> : null}</div>
 
-          <Button type="button" variant="secondary" onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}>
-            H1
-          </Button>
-          <Button type="button" variant="secondary" onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}>
-            H2
-          </Button>
-          <Button type="button" variant="secondary" onClick={() => editor?.chain().focus().toggleBulletList().run()}>
-            • List
-          </Button>
-
-          <Button type="button" variant="secondary" onClick={setLink}>
-            Link
-          </Button>
-
-          <Button type="button" variant="secondary" onClick={() => editor?.chain().focus().undo().run()}>
-            Undo
-          </Button>
-          <Button type="button" variant="secondary" onClick={() => editor?.chain().focus().redo().run()}>
-            Redo
-          </Button>
-        </div>
-
-        {/* 에디터 */}
-        <div className="rounded-md border border-border bg-background/30">
-          <EditorContent editor={editor} />
-        </div>
-
-        {/* 저장 */}
-        <div className="flex items-center justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={() => router.back()} disabled={saving || uploading !== null}>
-            취소
-          </Button>
-          <Button type="button" onClick={submit} disabled={!canSubmit}>
-            {mode === "edit" ? (saving ? "수정 중..." : "수정") : saving ? "저장 중..." : "저장"}
-          </Button>
-        </div>
+        <Button className="w-full" onClick={handleSave} disabled={!canSubmit}>
+          {saving ? "저장 중..." : "저장하기"}
+        </Button>
       </CardContent>
     </Card>
   )
+}
+
+function escapeHtmlText(s: string) {
+  return s
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;")
+}
+function escapeHtmlAttr(s: string) {
+  return escapeHtmlText(s)
 }
