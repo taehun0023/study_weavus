@@ -15,25 +15,20 @@ type CourseRow = {
   slug: string
 }
 
-type SearchParamsShape = {
-  course?: string
-  difficulty?: string
-}
-
 interface PostsPageProps {
-  // ✅ Promise/객체 둘 다 대응
-  searchParams?: SearchParamsShape | Promise<SearchParamsShape>
+  searchParams?: {
+    course?: string
+    difficulty?: string
+  }
 }
 
 export default async function PostsPage({ searchParams }: PostsPageProps) {
   const user = await getCurrentUser()
   if (!user) redirect("/login")
 
-  // ✅ await는 Promise든 객체든 둘 다 안전
-  const sp: SearchParamsShape = (searchParams ? await searchParams : {}) ?? {}
-
-  const currentCourse = sp.course || "java"
-  const currentDifficulty = sp.difficulty || "all"
+  const currentCourse = searchParams?.course || "java"
+  const currentDifficulty = searchParams?.difficulty || "all"
+  const isAdmin = user.user_role === "ADMIN"
 
   const courses = await sql<CourseRow>`
     SELECT name, slug
@@ -56,11 +51,12 @@ export default async function PostsPage({ searchParams }: PostsPageProps) {
           />
         </div>
 
-        {/* ✅ 일람은 수업내용(lesson)만 */}
+        {/* ✅ 일람은 수업내용만 */}
         <PostsList
           courseSlug={currentCourse}
           difficultyFilter={currentDifficulty}
           lessonOnly
+          isAdmin={isAdmin}
         />
       </main>
     </div>

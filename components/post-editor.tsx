@@ -1,11 +1,11 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
@@ -26,19 +26,24 @@ function isImageFile(file: File) {
 
 export default function PostEditor({ courses }: { courses: Course[] }) {
   const router = useRouter()
+
   const defaultCourseId = useMemo(() => courses?.[0]?.id?.toString() ?? "", [courses])
 
   const [title, setTitle] = useState("")
   const [courseId, setCourseId] = useState(defaultCourseId)
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "project">("easy")
-  const [content, setContent] = useState<string>(
-    `# 제목\n\n- 여기에 내용을 작성하세요.\n\n## 코드\n\n\`\`\`java\npublic class Main {\n  public static void main(String[] args) {\n    System.out.println("Hello");\n  }\n}\n\`\`\`\n`
-  )
+  const [content, setContent] = useState<string>("") // ✅ 기본 텍스트(글작성) 같은 거 없음
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
 
-  function insertAtCursor(text: string) {
-    setContent((prev) => prev + (prev.endsWith("\n") ? "" : "\n") + text + "\n")
+  const imageInputRef = useRef<HTMLInputElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  function appendToContent(text: string) {
+    setContent((prev) => {
+      const next = prev ? (prev.endsWith("\n") ? prev : prev + "\n") : ""
+      return next + text + "\n"
+    })
   }
 
   async function uploadFile(file: File) {
@@ -48,8 +53,12 @@ export default function PostEditor({ courses }: { courses: Course[] }) {
       form.append("file", file)
 
       const res = await fetch("/api/upload", { method: "POST", body: form })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data?.message ?? "Upload failed")
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        // ✅ 실패 이유를 바로 보여줌(403이면 ADMIN/env 문제 가능)
+        throw new Error(data?.message || `Upload failed (${res.status})`)
+      }
 
       return { url: data.url as string, filename: data.filename as string }
     } finally {
@@ -57,31 +66,38 @@ export default function PostEditor({ courses }: { courses: Course[] }) {
     }
   }
 
-  async function onPickImage(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handlePickImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ""
     if (!file) return
-    if (!isImageFile(file)) {
-      alert("이미지 파일만 선택하세요.")
-      return
-    }
+    if (!isImageFile(file)) return alert("이미지 파일만 선택하세요.")
 
-    const { url, filename } = await uploadFile(file)
-    insertAtCursor(`![${filename}](${url})`)
+    try {
+      const { url, filename } = await uploadFile(file)
+      // ✅ 마크다운이 싫으면 그냥 URL을 넣어도 되지만, 지금 상세가 마크다운 렌더링이라 이게 제일 깔끔
+      appendToContent(`![${filename}](${url})`)
+    } catch (err: any) {
+      alert(err?.message ?? "이미지 업로드 실패")
+    }
   }
 
-  async function onPickAttachment(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handlePickFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ""
     if (!file) return
 
-    const { url, filename } = await uploadFile(file)
-    insertAtCursor(`[${filename}](${url})`)
+    try {
+      const { url, filename } = await uploadFile(file)
+      appendToContent(`[${filename}](${url})`)
+    } catch (err: any) {
+      alert(err?.message ?? "파일 업로드 실패")
+    }
   }
 
   async function onSubmit() {
     if (!title.trim()) return alert("제목을 입력하세요.")
     if (!courseId) return alert("과목을 선택하세요.")
+    if (!content.trim()) return alert("내용을 입력하세요.")
 
     setLoading(true)
     try {
@@ -97,7 +113,7 @@ export default function PostEditor({ courses }: { courses: Course[] }) {
         }),
       })
 
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         alert(data?.message ?? "저장 실패")
         return
@@ -114,77 +130,99 @@ export default function PostEditor({ courses }: { courses: Course[] }) {
     <div className="grid gap-6 lg:grid-cols-2">
       <Card className="bg-card border-border">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>글 작성</CardTitle>
+          {/* ✅ “글작성” 텍스트 제거: 타이틀 안 둠 */}
+          <div className="text-sm text-muted-foreground">
+            마크다운/텍스트로 작성하면 상세페이지에서 보기 좋게 렌더링됩니다.
+          </div>
 
           <div className="flex items-center gap-2">
-            {/* 이미지 업로드 */}
-            <label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={onPickImage}
-                className="hidden"
-                disabled={uploading || loading}
-              />
-              <Button type="button" variant="secondary" size="sm" disabled={uploading || loading}>
-                {uploading ? "업로드..." : "이미지 첨부"}
-              </Button>
-            </label>
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handlePickImage}
+              className="hidden"
+              disabled={uploading || loading}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => imageInputRef.current?.click()}
+              disabled={uploading || loading}
+            >
+              {uploading ? "업로드..." : "이미지 첨부"}
+            </Button>
 
-            {/* 파일 업로드 */}
-            <label>
-              <input
-                type="file"
-                onChange={onPickAttachment}
-                className="hidden"
-                disabled={uploading || loading}
-              />
-              <Button type="button" variant="outline" size="sm" disabled={uploading || loading}>
-                {uploading ? "업로드..." : "파일 첨부"}
-              </Button>
-            </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={handlePickFile}
+              className="hidden"
+              disabled={uploading || loading}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading || loading}
+            >
+              {uploading ? "업로드..." : "파일 첨부"}
+            </Button>
           </div>
         </CardHeader>
 
         <CardContent className="space-y-4">
+          {/* 제목 */}
           <div className="space-y-2">
             <div className="text-sm text-muted-foreground">제목</div>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: Java 기초 문법" />
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="예: Java 기초 문법"
+            />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-2">
-              <div className="text-sm text-muted-foreground">과목</div>
-              <Select value={courseId} onValueChange={setCourseId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="과목 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  {courses.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {/* ✅ 과목/난이도: 라벨+드롭다운 나란히 / 난이도는 오른쪽 끝 */}
+          <div className="grid gap-3 sm:grid-cols-2 items-center">
+            {/* 과목 */}
+            <div className="flex items-center gap-3">
+              <div className="w-12 text-sm text-muted-foreground">과목</div>
+              <div className="flex-1">
+                <Select value={courseId} onValueChange={setCourseId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="과목 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {courses.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <div className="text-sm text-muted-foreground">난이도</div>
-              <Select value={difficulty} onValueChange={(v) => setDifficulty(v as any)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="난이도 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="easy">easy</SelectItem>
-                  <SelectItem value="medium">medium</SelectItem>
-                  <SelectItem value="project">project</SelectItem>
-                </SelectContent>
-              </Select>
+            {/* 난이도 (맨 오른쪽 정렬) */}
+            <div className="flex items-center gap-3 justify-end">
+              <div className="w-12 text-sm text-muted-foreground text-right">난이도</div>
+              <div className="w-[160px]">
+                <Select value={difficulty} onValueChange={(v) => setDifficulty(v as any)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="난이도 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="easy">easy</SelectItem>
+                    <SelectItem value="medium">medium</SelectItem>
+                    <SelectItem value="project">project</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
 
-          {/* ✅ “작성” 같은 불필요한 글씨 제거: 탭은 편집/미리보기만 */}
           <Tabs defaultValue="edit" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="edit">편집</TabsTrigger>
@@ -195,12 +233,9 @@ export default function PostEditor({ courses }: { courses: Course[] }) {
               <Textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                className="min-h-[460px] font-mono"
-                placeholder="마크다운으로 작성하세요"
+                className="min-h-[520px] font-mono"
+                placeholder="여기에 내용을 작성하세요. (이미지/파일 첨부 버튼을 누르면 링크가 자동으로 들어갑니다)"
               />
-              <div className="text-xs text-muted-foreground">
-                이미지/파일 첨부 버튼을 누르면 마크다운 링크가 본문에 자동으로 들어갑니다.
-              </div>
             </TabsContent>
 
             <TabsContent value="preview">
@@ -216,9 +251,10 @@ export default function PostEditor({ courses }: { courses: Course[] }) {
         </CardContent>
       </Card>
 
+      {/* 미리보기 */}
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle>실시간 미리보기</CardTitle>
+          <div className="text-sm font-medium">실시간 미리보기</div>
         </CardHeader>
         <CardContent>
           <div className="prose prose-invert max-w-none rounded-md border border-border p-4">

@@ -21,6 +21,7 @@ type Difficulty = "easy" | "medium" | "hard" | "project" | null
 
 type PostRow = {
   id: number
+  course_id: number
   title: string
   type: PostType
   difficulty: Difficulty
@@ -28,6 +29,8 @@ type PostRow = {
   course_name: string
   course_slug: string
 }
+
+type RelatedRow = { id: number }
 
 function typeLabel(t: PostType) {
   if (t === "lesson") return "수업내용"
@@ -61,16 +64,14 @@ type ParamsShape = { postId?: string }
 export default async function PostDetailPage({
   params,
 }: {
-  // ✅ params가 Promise로 들어오는 경우까지 대응
   params: ParamsShape | Promise<ParamsShape>
 }) {
   const user = await getCurrentUser()
   if (!user) redirect("/login")
 
   const p: ParamsShape = (params ? await params : {}) ?? {}
-  const rawId = p.postId
+  const postId = Number.parseInt(String(p.postId ?? ""), 10)
 
-  const postId = Number.parseInt(String(rawId ?? ""), 10)
   if (!Number.isFinite(postId) || postId <= 0) {
     return (
       <div className="min-h-screen bg-background">
@@ -87,6 +88,7 @@ export default async function PostDetailPage({
   const rows = await sql<PostRow>`
     SELECT
       p.id,
+      p.course_id,
       p.title,
       p.type,
       p.difficulty,
@@ -113,9 +115,32 @@ export default async function PostDetailPage({
     )
   }
 
-  // DB에 "\\n"이 들어간 경우 보정 (줄바꿈 깨짐 방지)
+  // ✅ 줄바꿈 보정(\\n 들어간 케이스)
   const raw = post.content ?? ""
   const content = raw.includes("\\n") ? raw.replace(/\\n/g, "\n") : raw
+
+  // ✅ 하단 버튼용: 같은 course에서 최신 reference/quiz 1개를 찾는다.
+  // (현재 DB 구조상 lesson과의 정확한 매칭 키가 없어서, 일단 course 기준)
+  const [ref] = await sql<RelatedRow>`
+    SELECT id
+    FROM public.posts
+    WHERE course_id = ${post.course_id}
+      AND type = 'reference'
+    ORDER BY id DESC
+    LIMIT 1
+  `
+
+  const [quiz] = await sql<RelatedRow>`
+    SELECT id
+    FROM public.posts
+    WHERE course_id = ${post.course_id}
+      AND type = 'quiz'
+    ORDER BY id DESC
+    LIMIT 1
+  `
+
+  const refId = ref?.id ?? null
+  const quizId = quiz?.id ?? null
 
   return (
     <div className="min-h-screen bg-background">
@@ -142,12 +167,30 @@ export default async function PostDetailPage({
             <CardTitle className="text-2xl">{post.title}</CardTitle>
           </CardHeader>
 
-          <CardContent>
+          <CardContent className="space-y-6">
             {content.trim().length === 0 ? (
               <div className="text-sm text-muted-foreground">내용이 없습니다.</div>
             ) : (
               <div className="prose prose-invert max-w-none">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+              </div>
+            )}
+
+            {/* ✅ 하단 버튼 복구 */}
+            <div className="flex flex-wrap gap-3 pt-2">
+              <Button asChild variant="secondary" disabled={!refId}>
+                <Link href={refId ? `/posts/${refId}` : "#"}>참고자료 보기</Link>
+              </Button>
+
+              <Button asChild disabled={!quizId}>
+                <Link href={quizId ? `/posts/${quizId}` : "#"}>문제풀이 하러가기</Link>
+              </Button>
+            </div>
+
+            {(!refId || !quizId) && (
+              <div className="text-xs text-muted-foreground">
+                {refId ? "" : "참고자료가 없습니다. "}
+                {quizId ? "" : "문제풀이가 없습니다."}
               </div>
             )}
           </CardContent>

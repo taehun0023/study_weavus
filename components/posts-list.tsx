@@ -3,6 +3,7 @@ import Link from "next/link"
 import { sql } from "@/lib/db"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import PostAdminActions from "@/components/post-admin-actions"
 
 type Difficulty = "easy" | "medium" | "hard" | "project" | null
 
@@ -35,14 +36,24 @@ function difficultyClass(d: Difficulty): string {
   return ""
 }
 
+function buildReturnHref(courseSlug: string, difficultyFilter: string) {
+  const params = new URLSearchParams()
+  params.set("course", courseSlug)
+  if (difficultyFilter && difficultyFilter !== "all") params.set("difficulty", difficultyFilter)
+  const qs = params.toString()
+  return qs ? `/posts?${qs}` : "/posts"
+}
+
 export async function PostsList({
   courseSlug,
   difficultyFilter = "all",
   lessonOnly = false,
+  isAdmin = false,
 }: {
   courseSlug: string
   difficultyFilter?: string
   lessonOnly?: boolean
+  isAdmin?: boolean
 }) {
   const rows = await sql<PostRow>`
     SELECT 
@@ -76,13 +87,28 @@ export async function PostsList({
     )
   }
 
+  const returnHref = buildReturnHref(courseSlug, difficultyFilter)
+
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {rows.map((row) => (
         <Link key={row.id} href={`/posts/${row.id}`} className="block">
-          <Card className="bg-card border-border hover:border-primary/50 transition-colors cursor-pointer h-full">
+          <Card className="relative bg-card border-border hover:border-primary/50 transition-colors cursor-pointer h-full">
+            {/* ✅ 관리자 수정/삭제 버튼: 카드 오른쪽 상단 */}
+            {isAdmin && (
+              <div className="absolute right-3 top-3 z-10">
+                <PostAdminActions
+                  postId={row.id}
+                  editHref={`/posts/${row.id}/edit`}
+                  afterDeleteHref={returnHref}
+                  size="sm"
+                />
+              </div>
+            )}
+
             <CardHeader className="pb-2">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 pr-20">
+                {/* ✅ 일람은 수업내용만 */}
                 <Badge variant="outline">수업내용</Badge>
 
                 {row.difficulty && (
@@ -91,7 +117,6 @@ export async function PostsList({
                   </Badge>
                 )}
               </div>
-
               <CardTitle className="mt-2">{row.title}</CardTitle>
             </CardHeader>
 
