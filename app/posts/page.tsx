@@ -1,4 +1,7 @@
 // app/posts/page.tsx
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth"
 import DashboardHeader from "@/components/dashboard-header"
