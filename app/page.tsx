@@ -29,7 +29,9 @@ export default async function HomePage() {
         <UserPerfectGraph />
 
         <CourseCards userId={user.id} />
-        <RecentActivity userId={user.id} />
+
+        {/* ✅ 관리자 화면에서는 "최근 학습 활동/최근 만점 달성" 숨김 */}
+        {!isAdmin ? <RecentActivity userId={user.id} /> : null}
 
         {isAdmin ? (
           <>
