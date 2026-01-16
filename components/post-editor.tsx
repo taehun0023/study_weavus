@@ -1,273 +1,302 @@
-"use client"
+"use client";
 
-import { useEffect, useMemo, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent } from "@/components/ui/card"
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 
-import { useEditor, EditorContent } from "@tiptap/react"
-import StarterKit from "@tiptap/starter-kit"
-import Image from "@tiptap/extension-image"
-import Link from "@tiptap/extension-link"
-import Placeholder from "@tiptap/extension-placeholder"
-import Underline from "@tiptap/extension-underline"
+const NONE = "__none__";
 
-export type Course = { id: number; name: string; slug: string }
-export type Difficulty = "easy" | "medium" | "project"
+import QuillEditor from "@/components/quill-editor";
 
+export type Course = { id: number; name: string; slug: string };
+
+// 기존 Difficulty 유지 (UI는 easy/medium/project만 씀)
+export type Difficulty = "easy" | "medium" | "project";
+
+// ✅ 새로 추가: 글 타입
+export type PostType = "lesson" | "reference" | "quiz";
+
+// ✅ 기존 payload 확장: type 포함 + lesson이면 세트 연결 id 포함
 export type PostEditorPayload = {
-  title: string
-  courseId: number
-  difficulty: Difficulty
-  content: string
-}
+  title: string;
+  courseId: number;
+  difficulty: Difficulty;
+  type: PostType;
+  content: string;
+  referencePostId?: number | null;
+  quizPostId?: number | null;
+};
+
+type OptionItem = { id: number; title: string };
 
 export default function PostEditor({
-  courses,
   initial,
-  onSubmit,
+  courses,
 }: {
-  courses: Course[]
-  initial?: {
-    title: string
-    courseId: number
-    difficulty: Difficulty
-    content: string
-  }
-  onSubmit?: (payload: PostEditorPayload) => Promise<void>
+  initial?: Partial<PostEditorPayload> & { id?: number };
+  courses: Course[];
 }) {
-  const router = useRouter()
-  const imgRef = useRef<HTMLInputElement | null>(null)
-  const fileRef = useRef<HTMLInputElement | null>(null)
+  const router = useRouter();
 
-  const safeCourses = Array.isArray(courses) ? courses : []
-  const initialCourseId = initial?.courseId ?? safeCourses[0]?.id ?? 0
+  const isEdit = Boolean(initial?.id);
 
-  const [title, setTitle] = useState(initial?.title ?? "")
-  const [courseId, setCourseId] = useState<number>(initialCourseId)
-  const [difficulty, setDifficulty] = useState<Difficulty>(initial?.difficulty ?? "easy")
-  const [content, setContent] = useState<string>(initial?.content ?? "")
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [courseId, setCourseId] = useState<number>(
+    initial?.courseId ?? courses?.[0]?.id ?? 1
+  );
+  const [difficulty, setDifficulty] = useState<Difficulty>(
+    (initial?.difficulty as Difficulty) ?? "easy"
+  );
+  const [type, setType] = useState<PostType>(
+    (initial?.type as PostType) ?? "lesson"
+  );
+  const [content, setContent] = useState(initial?.content ?? "");
 
-  const [saving, setSaving] = useState(false)
-  const [uploading, setUploading] = useState<null | "image" | "file">(null)
+  const [saving, setSaving] = useState(false);
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
-      Underline,
-      Image.configure({ inline: false, allowBase64: false }),
-      Link.configure({
-        openOnClick: true,
-        autolink: true,
-        linkOnPaste: true,
-        HTMLAttributes: { rel: "noreferrer", target: "_blank" },
-      }),
-      Placeholder.configure({ placeholder: "" }),
-    ],
-    content: initial?.content ?? "",
-    editorProps: {
-      attributes: {
-        class:
-          "min-h-[520px] rounded-md border border-border bg-background/40 p-4 outline-none prose prose-invert max-w-none",
-      },
-    },
-    onUpdate: ({ editor }) => setContent(editor.getHTML()),
-  })
+  // lesson일 때만 세트 연결(참조/퀴즈) 가능
+  const [referencePostId, setReferencePostId] = useState<number | null>(
+    typeof initial?.referencePostId === "number"
+      ? initial!.referencePostId
+      : null
+  );
+  const [quizPostId, setQuizPostId] = useState<number | null>(
+    typeof initial?.quizPostId === "number" ? initial!.quizPostId : null
+  );
 
-  // ✅ 편집 페이지에서 초기값 반영
-  useEffect(() => {
-    if (!editor) return
-    if (initial?.content != null) editor.commands.setContent(initial.content)
-  }, [editor, initial?.content])
+  // 같은 과목의 reference/quiz 선택 옵션
+  const [referenceOptions, setReferenceOptions] = useState<OptionItem[]>([]);
+  const [quizOptions, setQuizOptions] = useState<OptionItem[]>([]);
 
   const canSubmit = useMemo(() => {
-    return title.trim().length > 0 && courseId > 0 && !saving && uploading === null
-  }, [title, courseId, saving, uploading])
+    return title.trim().length > 0 && content.trim().length > 0 && !saving;
+  }, [title, content, saving]);
 
-  function escapeHtmlText(s: string) {
-    return s
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;")
-  }
-  function escapeHtmlAttr(s: string) {
-    return escapeHtmlText(s)
-  }
-
-  async function uploadAndInsert(kind: "image" | "file", file: File) {
-    if (!editor) return
-    setUploading(kind)
-    try {
-      const fd = new FormData()
-      fd.append("file", file)
-
-      const res = await fetch("/api/upload", { method: "POST", body: fd })
-      const data = await res.json().catch(() => ({} as any))
-
-      if (!res.ok) {
-        alert(data?.message ?? `Upload failed (${res.status})`)
-        return
-      }
-
-      const url = data?.url as string | undefined
-      const name = (data?.filename as string) || file.name
-
-      if (!url) {
-        alert("Upload succeeded but no url was returned from /api/upload")
-        return
-      }
-
-      if (kind === "image") {
-        editor.chain().focus().setImage({ src: url, alt: name }).run()
-      } else {
-        editor
-          .chain()
-          .focus()
-          .insertContent(
-            `<p><a href="${escapeHtmlAttr(url)}" target="_blank" rel="noreferrer">${escapeHtmlText(
-              name
-            )}</a></p>`
-          )
-          .run()
-      }
-    } finally {
-      setUploading(null)
+  useEffect(() => {
+    // lesson이 아니면 연결 해제
+    if (type !== "lesson") {
+      setReferencePostId(null);
+      setQuizPostId(null);
     }
-  }
+  }, [type]);
+
+  useEffect(() => {
+    // courseId/type 변경 시 옵션 로드
+    async function load() {
+      try {
+        const res = await fetch(`/api/posts/options?courseId=${courseId}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+        setReferenceOptions(json.referenceOptions ?? []);
+        setQuizOptions(json.quizOptions ?? []);
+      } catch {
+        // ignore
+      }
+    }
+    load();
+  }, [courseId]);
 
   async function defaultCreate(payload: PostEditorPayload) {
     const res = await fetch("/api/posts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: payload.title,
-        courseId: payload.courseId,
-        difficulty: payload.difficulty,
-        content: payload.content,
-        type: "lesson",
-      }),
-    })
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("CREATE_FAILED");
+    return res.json();
+  }
 
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      alert(data?.message ?? `저장 실패 (${res.status})`)
-      return
-    }
-
-    const id = data?.id
-    router.push(id ? `/posts/${id}` : "/posts")
-    router.refresh()
+  async function defaultUpdate(id: number, payload: PostEditorPayload) {
+    const res = await fetch(`/api/posts/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("UPDATE_FAILED");
+    return res.json();
   }
 
   async function handleSave() {
-    const t = title.trim()
-    if (!t) return alert("제목을 입력하세요.")
-    if (!courseId) return alert("과목을 선택하세요.")
+    if (!canSubmit) return;
 
-    const html = editor?.getHTML?.() ?? content
-
-    setSaving(true)
+    setSaving(true);
     try {
-      const payload: PostEditorPayload = { title: t, courseId, difficulty, content: html }
+      const payload: PostEditorPayload = {
+        title: title.trim(),
+        courseId,
+        difficulty,
+        type,
+        content,
+        referencePostId: type === "lesson" ? referencePostId : null,
+        quizPostId: type === "lesson" ? quizPostId : null,
+      };
 
-      if (onSubmit) {
-        await onSubmit(payload)
+      if (isEdit && initial?.id) {
+        await defaultUpdate(initial.id, payload);
+        router.replace(`/posts/${initial.id}`);
+        router.refresh();
       } else {
-        await defaultCreate(payload)
+        const created = await defaultCreate(payload);
+        router.replace(`/posts/${created?.id ?? ""}`);
+        router.refresh();
       }
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
   }
 
   return (
-    <Card className="bg-card border-border">
-      <CardContent className="p-6 space-y-4">
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">제목</div>
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: Java 기초 문법" />
+    <Card>
+      <CardContent className="space-y-4 p-4">
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-2">
+            <div className="text-sm text-muted-foreground">제목</div>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="제목"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="text-sm text-muted-foreground">과목</div>
+              <div className="w-[180px]">
+                <Select
+                  value={String(courseId)}
+                  onValueChange={(v) => setCourseId(Number(v))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {courses.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="text-sm text-muted-foreground">글 종류</div>
+              <div className="w-[160px]">
+                <Select
+                  value={type}
+                  onValueChange={(v) => setType(v as PostType)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="lesson">수업</SelectItem>
+                    <SelectItem value="reference">참조자료</SelectItem>
+                    <SelectItem value="quiz">문제풀이</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {type === "lesson" && (
+              <div className="flex items-center gap-2">
+                <div className="text-sm text-muted-foreground">난이도</div>
+                <div className="w-[140px]">
+                  <Select
+                    value={difficulty}
+                    onValueChange={(v) => setDifficulty(v as Difficulty)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="easy">easy</SelectItem>
+                      <SelectItem value="medium">medium</SelectItem>
+                      <SelectItem value="project">project</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <div className="text-sm text-muted-foreground">과목</div>
-            <div className="w-[160px]">
-              <Select value={String(courseId)} onValueChange={(v) => setCourseId(Number(v))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {safeCourses.map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        {/* ✅ lesson일 때만: 세트 연결 선택 */}
+        {type === "lesson" && (
+          <div className="flex flex-wrap gap-3">
+            <div className="flex items-center gap-2">
+              <div className="text-sm text-muted-foreground">참조자료 연결</div>
+              <div className="w-[280px]">
+                <Select
+                  value={referencePostId ? String(referencePostId) : NONE}
+                  onValueChange={(v) =>
+                    setReferencePostId(v === NONE ? null : Number(v))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="선택 안 함" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>선택 안 함</SelectItem>
+                    {referenceOptions.map((p) => (
+                      <SelectItem key={p.id} value={String(p.id)}>
+                        {p.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="text-sm text-muted-foreground">문제풀이 연결</div>
+              <div className="w-[280px]">
+                <Select
+                  value={quizPostId ? String(quizPostId) : NONE}
+                  onValueChange={(v) =>
+                    setQuizPostId(v === NONE ? null : Number(v))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="선택 안 함" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>선택 안 함</SelectItem>
+                    {quizOptions.map((p) => (
+                      <SelectItem key={p.id} value={String(p.id)}>
+                        {p.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="text-xs text-muted-foreground">
+              ※ 같은 과목의 reference/quiz 글을 선택해 이 수업과 1:1로 묶습니다.
             </div>
           </div>
+        )}
 
-          <div className="flex items-center gap-2">
-            <div className="text-sm text-muted-foreground">난이도</div>
-            <div className="w-[140px]">
-              <Select value={difficulty} onValueChange={(v) => setDifficulty(v as Difficulty)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="easy">easy</SelectItem>
-                  <SelectItem value="medium">medium</SelectItem>
-                  <SelectItem value="project">project</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <input
-              ref={imgRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0]
-                if (f) uploadAndInsert("image", f)
-                e.currentTarget.value = ""
-              }}
-            />
-            <input
-              ref={fileRef}
-              type="file"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0]
-                if (f) uploadAndInsert("file", f)
-                e.currentTarget.value = ""
-              }}
-            />
-
-            <Button type="button" variant="secondary" onClick={() => imgRef.current?.click()} disabled={uploading !== null}>
-              {uploading === "image" ? "업로드 중..." : "이미지 첨부"}
-            </Button>
-            <Button type="button" variant="secondary" onClick={() => fileRef.current?.click()} disabled={uploading !== null}>
-              {uploading === "file" ? "업로드 중..." : "파일 첨부"}
-            </Button>
-          </div>
-        </div>
-
-        <div className="rounded-md border border-border bg-background/30">
-          <EditorContent editor={editor} />
-        </div>
+        <QuillEditor value={content} onChange={setContent} />
 
         <Button className="w-full" onClick={handleSave} disabled={!canSubmit}>
           {saving ? "저장 중..." : "저장하기"}
         </Button>
       </CardContent>
     </Card>
-  )
+  );
 }

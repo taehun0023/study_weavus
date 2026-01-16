@@ -1,36 +1,46 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import type { AuthUser } from "@/lib/auth"
-import { Button } from "@/components/ui/button"
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import type { AuthUser } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
 
 export default function HeaderUserBar({ user }: { user: AuthUser }) {
-  const router = useRouter()
+  const router = useRouter();
+
+  const displayName =
+    (user.display_name ?? "").trim() || (user.username ?? "").trim() || "User";
 
   async function onLogout() {
-    await fetch("/api/auth/logout", { method: "POST" })
-    router.replace("/login")
-    router.refresh()
+    router.replace("/logout");
   }
 
   return (
     <div className="flex items-center gap-3 text-sm">
-      {/* ✅ username 왼쪽에 글작성(ADMIN만) */}
       {user.user_role === "ADMIN" && (
-        <Button asChild variant="secondary" size="sm">
-          <Link href="/posts/new">글작성</Link>
-        </Button>
+        <>
+          <Button asChild variant="secondary" size="sm" type="button">
+            <Link href="/posts/new">글작성</Link>
+          </Button>
+
+          <Button asChild variant="secondary" size="sm" type="button">
+            <Link href="/admin/users/new">유저등록</Link>
+          </Button>
+
+          {/* ✅ NEW: 관리자만 제출물 확인 */}
+          <Button asChild variant="secondary" size="sm" type="button">
+            <Link href="/admin/submissions">제출물</Link>
+          </Button>
+        </>
       )}
 
-      <span className="text-muted-foreground">
-        {user.display_name} ({user.username})
+      <span className="whitespace-nowrap">
+        {displayName} ({user.username})
       </span>
 
-      {/* ✅ username 오른쪽에 로그아웃 */}
-      <Button onClick={onLogout} variant="outline" size="sm">
+      <Button onClick={onLogout} variant="outline" size="sm" type="button">
         로그아웃
       </Button>
     </div>
-  )
+  );
 }

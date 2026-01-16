@@ -7,7 +7,7 @@ import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth"
 import { sql } from "@/lib/db"
 import DashboardHeader from "@/components/dashboard-header"
-import PostEditor from "@/components/post-editor"
+import LessonSetEditor from "@/components/lesson-set-editor"
 
 type CourseRow = { id: number; name: string; slug: string }
 
@@ -28,10 +28,11 @@ export default async function NewPostPage() {
 
       <main className="container mx-auto px-4 py-8 space-y-6">
         <div className="flex items-baseline justify-between gap-3">
-          <h1 className="text-2xl font-bold">글작성</h1>
+          <h1 className="text-2xl font-bold">세트 작성</h1>
         </div>
 
-        <PostEditor courses={courses} />
+        {/* 글작성은 세트 작성 UI(수업 + 선택: 참조/문제)로 통일 */}
+        <LessonSetEditor courses={courses} />
       </main>
     </div>
   )

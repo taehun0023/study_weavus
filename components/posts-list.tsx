@@ -1,83 +1,96 @@
-// components/posts-list.tsx
-import { sql } from "@/lib/db"
-import PostCardClient from "@/components/post-card-client"
+import PostCardClient from "@/components/post-card-client";
+import { sql } from "@/lib/db";
 
-type Difficulty = "easy" | "medium" | "hard" | "project" | null
+type Difficulty = "easy" | "medium" | "hard" | "project" | null;
+type PostType = "lesson" | "reference" | "quiz";
 
-type PostRow = {
-  id: number | string
-  title: string
-  difficulty: Difficulty
-  course_name: string
-}
-
-function buildReturnHref(courseSlug: string, difficultyFilter: string) {
-  const params = new URLSearchParams()
-  params.set("course", courseSlug)
-  if (difficultyFilter && difficultyFilter !== "all") params.set("difficulty", difficultyFilter)
-  const qs = params.toString()
-  return qs ? `/posts?${qs}` : "/posts"
-}
+type Row = {
+  id: number;
+  title: string;
+  difficulty: Difficulty;
+  type: PostType;
+  course_name: string;
+  course_slug: string;
+};
 
 export async function PostsList({
+  courseId,
   courseSlug,
-  difficultyFilter = "all",
-  lessonOnly = false,
-  isAdmin = false,
+  difficulty,
+  isAdmin,
 }: {
-  courseSlug: string
-  difficultyFilter?: string
-  lessonOnly?: boolean
-  isAdmin?: boolean
+  courseId: number;
+  courseSlug: string;
+  difficulty: string; // all|easy|medium|project
+  isAdmin: boolean;
 }) {
-  const rows = await sql<PostRow>`
-    SELECT
-      p.id,
-      p.title,
-      p.difficulty,
-      c.name as course_name
-    FROM public.posts p
-    JOIN public.courses c ON p.course_id = c.id
-    WHERE c.slug = ${courseSlug}
-      AND (${lessonOnly} = false OR p.type = 'lesson')
-      AND (
-        ${difficultyFilter} = 'all'
-        OR (
-          ${difficultyFilter} = 'project' AND p.difficulty IN ('project','hard')
-        )
-        OR (
-          ${difficultyFilter} IN ('easy','medium') AND p.difficulty = ${difficultyFilter}
-        )
-      )
-    ORDER BY p.id
-  `
+  const returnHref =
+    difficulty && difficulty !== "all"
+      ? `/posts?course=${courseSlug}&difficulty=${difficulty}`
+      : `/posts?course=${courseSlug}`;
 
-  if (!rows || rows.length === 0) {
-    return (
-      <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
-        해당 조건에 맞는 게시글이 없습니다.
-      </div>
-    )
+  let rows: Row[] = [];
+
+  // ✅ 목록에는 lesson만 보여주게(UX 일관)
+  if (difficulty && difficulty !== "all") {
+    const diffDb = difficulty === "project" ? "hard" : difficulty;
+
+    rows = await sql<Row>`
+      SELECT
+        p.id,
+        p.title,
+        p.difficulty,
+        p.type,
+        c.name AS course_name,
+        c.slug AS course_slug
+      FROM public.posts p
+      JOIN public.courses c ON c.id = p.course_id
+      WHERE p.course_id = ${courseId}
+        AND p.type = 'lesson'
+        AND p.difficulty = ${diffDb}
+      ORDER BY p.id DESC
+      LIMIT 200
+    `;
+  } else {
+    rows = await sql<Row>`
+      SELECT
+        p.id,
+        p.title,
+        p.difficulty,
+        p.type,
+        c.name AS course_name,
+        c.slug AS course_slug
+      FROM public.posts p
+      JOIN public.courses c ON c.id = p.course_id
+      WHERE p.course_id = ${courseId}
+        AND p.type = 'lesson'
+      ORDER BY p.id DESC
+      LIMIT 200
+    `;
   }
 
-  const returnHref = buildReturnHref(courseSlug, difficultyFilter)
+  if (!rows.length) {
+    return (
+      <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
+        게시글이 없습니다.
+      </div>
+    );
+  }
 
   return (
-    <div className="grid gap-6 md:grid-cols-2">
-      {rows.map((row) => {
-        const postId = String(row.id)
-        return (
-          <PostCardClient
-            key={postId}
-            postId={postId}
-            title={row.title}
-            difficulty={row.difficulty}
-            courseName={row.course_name}
-            isAdmin={isAdmin}
-            returnHref={returnHref}
-          />
-        )
-      })}
+    <div className="space-y-3">
+      {rows.map((r) => (
+        <PostCardClient
+          key={r.id}
+          postId={r.id}
+          title={r.title}
+          courseName={r.course_name}
+          difficulty={r.difficulty}
+          postType={r.type}
+          isAdmin={isAdmin}
+          returnHref={returnHref}
+        />
+      ))}
     </div>
-  )
+  );
 }

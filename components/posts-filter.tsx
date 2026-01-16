@@ -1,93 +1,110 @@
-// components/posts-filter.tsx
-"use client"
+"use client";
 
-import { useMemo } from "react"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Select,
-  SelectContent,
-  SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { difficultyButtonClass } from "@/lib/difficulty";
 
-type CourseOption = {
-  name: string
-  slug: string
-}
-
-interface PostsFilterProps {
-  courses: CourseOption[]
-  currentCourse: string
-  currentDifficulty: string
-}
+type Course = { id: number; name: string; slug: string };
 
 export function PostsFilter({
   courses,
-  currentCourse,
-  currentDifficulty,
-}: PostsFilterProps) {
-  const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
+  selectedCourseSlug,
+  selectedDifficulty,
+}: {
+  courses: Course[];
+  selectedCourseSlug: string;
+  selectedDifficulty: string; // all|easy|medium|project
+}) {
+  const router = useRouter();
+  const sp = useSearchParams();
 
-  const courseOptions = useMemo(() => {
-    if (!courses || courses.length === 0) return [{ slug: "java", name: "Java" }]
-    return courses
-  }, [courses])
+  const setCourse = (slug: string) => {
+    const next = new URLSearchParams(sp.toString());
+    next.set("course", slug);
+    next.delete("difficulty"); // 과목 바꾸면 난이도는 all로
+    router.push(`/posts?${next.toString()}`);
+  };
 
-  function push(next: { course?: string; difficulty?: string }) {
-    const params = new URLSearchParams(searchParams.toString())
+  const setDifficulty = (diff: string) => {
+    const next = new URLSearchParams(sp.toString());
+    if (diff === "all") next.delete("difficulty");
+    else next.set("difficulty", diff);
+    router.push(`/posts?${next.toString()}`);
+  };
 
-    const course = next.course ?? params.get("course") ?? currentCourse ?? "java"
-    params.set("course", course)
-
-    const diff =
-      next.difficulty ?? params.get("difficulty") ?? currentDifficulty ?? "all"
-
-    if (!diff || diff === "all") params.delete("difficulty")
-    else params.set("difficulty", diff)
-
-    const qs = params.toString()
-    router.push(qs ? `${pathname}?${qs}` : pathname)
-  }
+  const isAll = selectedDifficulty === "all";
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <Select value={currentCourse} onValueChange={(v) => push({ course: v })}>
-        <SelectTrigger className="w-full sm:w-[180px]">
-          <SelectValue placeholder="과목 선택" />
-        </SelectTrigger>
-        <SelectContent>
-          {courseOptions.map((c) => (
-            <SelectItem key={c.slug} value={c.slug}>
-              {c.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+    <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="w-[240px]">
+        <Select value={selectedCourseSlug} onValueChange={setCourse}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {courses.map((c, idx) => (
+              <SelectItem key={`${c.slug}-${c.id}-${idx}`} value={c.slug}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-      <ToggleGroup
-        type="single"
-        value={currentDifficulty}
-        onValueChange={(v) => push({ difficulty: v || "all" })}
-        variant="outline"
-        className="grid w-full grid-cols-4 sm:w-auto"
-      >
-        <ToggleGroupItem value="all" className="text-sm">
-          전체
-        </ToggleGroupItem>
-        <ToggleGroupItem value="easy" className="text-sm">
-          easy
-        </ToggleGroupItem>
-        <ToggleGroupItem value="medium" className="text-sm">
-          medium
-        </ToggleGroupItem>
-        <ToggleGroupItem value="project" className="text-sm">
-          project
-        </ToggleGroupItem>
-      </ToggleGroup>
+      <div className="flex items-center gap-2">
+        <div className="inline-flex rounded-md border border-border overflow-hidden">
+          <Button
+            variant={isAll ? "secondary" : "ghost"}
+            className="rounded-none"
+            onClick={() => setDifficulty("all")}
+          >
+            전체
+          </Button>
+
+          <Button
+            variant="ghost"
+            className={`rounded-none border-l border-border ${
+              selectedDifficulty === "easy"
+                ? `border ${difficultyButtonClass("easy")}`
+                : ""
+            }`}
+            onClick={() => setDifficulty("easy")}
+          >
+            easy
+          </Button>
+
+          <Button
+            variant="ghost"
+            className={`rounded-none border-l border-border ${
+              selectedDifficulty === "medium"
+                ? `border ${difficultyButtonClass("medium")}`
+                : ""
+            }`}
+            onClick={() => setDifficulty("medium")}
+          >
+            medium
+          </Button>
+
+          <Button
+            variant="ghost"
+            className={`rounded-none border-l border-border ${
+              selectedDifficulty === "project"
+                ? `border ${difficultyButtonClass("project")}`
+                : ""
+            }`}
+            onClick={() => setDifficulty("project")}
+          >
+            project
+          </Button>
+        </div>
+      </div>
     </div>
-  )
+  );
 }

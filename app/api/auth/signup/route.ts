@@ -25,12 +25,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Hash password and create user
-    const passwordHash = hashPassword(password)
+    const passwordHash = await hashPassword(password)
 
     const newUsers = await sql`
-      INSERT INTO users (username, password_hash, display_name)
-      VALUES (${username}, ${passwordHash}, ${displayName})
-      RETURNING id, username, display_name
+      INSERT INTO users (username, password_hash, display_name, user_role)
+      VALUES (${username}, ${passwordHash}, ${displayName}, 'USER')
+      RETURNING id, username, display_name, user_role
     `
 
     const newUser = newUsers[0]
@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
         id: newUser.id,
         username: newUser.username,
         displayName: newUser.display_name,
+        userRole: newUser.user_role ?? "USER",
       },
     })
   } catch (error) {
