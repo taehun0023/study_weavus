@@ -1,16 +1,8 @@
 "use client";
 
-import PostEditor, {
-  Course,
-  Difficulty,
-  PostEditorPayload,
-} from "@/components/post-editor";
+import PostEditor, { Course, Difficulty } from "@/components/post-editor";
 
-export default function EditClient({
-  postId,
-  courses,
-  initial,
-}: {
+type EditClientProps = {
   postId: number;
   courses: Course[];
   initial: {
@@ -19,26 +11,25 @@ export default function EditClient({
     courseId: number;
     difficulty: Difficulty;
   };
-}) {
+};
+
+export default function EditClient({
+  postId,
+  courses,
+  initial,
+}: EditClientProps) {
   return (
     <PostEditor
       courses={courses}
-      initial={initial}
-      onSubmit={async (payload: PostEditorPayload) => {
-        const res = await fetch(`/api/posts/${postId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          alert(data?.message ?? `수정 실패 (${res.status})`);
-          return;
-        }
-
-        // 수정 완료 후 상세로 이동
-        window.location.href = `/posts/${postId}`;
+      // ✅ PostEditor는 initial.id가 있으면 수정 모드(isEdit)로 동작함
+      initial={{
+        id: postId,
+        title: initial.title,
+        content: initial.content,
+        courseId: initial.courseId,
+        difficulty: initial.difficulty,
+        // type은 안 넘기면 기본 "lesson"이라 그대로 둬도 됨
+        // type: "lesson",
       }}
     />
   );

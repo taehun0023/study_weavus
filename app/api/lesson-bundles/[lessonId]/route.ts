@@ -91,7 +91,7 @@ async function loadAttachments(client: any, postId: number) {
       WHERE pa.post_id = $1
       ORDER BY pa.order_index ASC, pa.id ASC
       `,
-      [postId]
+      [postId],
     )
   ).rows.map((r: any) => ({
     uploadId: r.upload_id,
@@ -106,7 +106,7 @@ async function loadAttachments(client: any, postId: number) {
 async function replaceAttachments(
   client: any,
   postId: number,
-  uploadIds: number[]
+  uploadIds: number[],
 ) {
   await client.query(`DELETE FROM public.post_attachments WHERE post_id=$1`, [
     postId,
@@ -117,14 +117,41 @@ async function replaceAttachments(
       INSERT INTO public.post_attachments (post_id, upload_id, order_index)
       VALUES ($1, $2, $3)
       `,
-      [postId, uploadIds[i], i]
+      [postId, uploadIds[i], i],
     );
   }
 }
 
+/**
+ * ✅ "연결 해제"가 아니라 "진짜 삭제"를 위한 helper
+ * - FK 문제 방지 위해 attachments/questions 먼저 삭제
+ * - 마지막에 posts 삭제
+ */
+async function deleteReferencePostCascade(client: any, postId: number) {
+  await client.query(`DELETE FROM public.post_attachments WHERE post_id=$1`, [
+    postId,
+  ]);
+  await client.query(
+    `DELETE FROM public.posts WHERE id=$1 AND type='reference'`,
+    [postId],
+  );
+}
+
+async function deleteQuizPostCascade(client: any, postId: number) {
+  await client.query(`DELETE FROM public.quiz_questions WHERE post_id=$1`, [
+    postId,
+  ]);
+  await client.query(`DELETE FROM public.post_attachments WHERE post_id=$1`, [
+    postId,
+  ]);
+  await client.query(`DELETE FROM public.posts WHERE id=$1 AND type='quiz'`, [
+    postId,
+  ]);
+}
+
 export async function GET(
   _req: Request,
-  { params }: { params: { lessonId: string } | Promise<{ lessonId: string }> }
+  { params }: { params: { lessonId: string } | Promise<{ lessonId: string }> },
 ) {
   const user = await getCurrentUser();
   if (!user)
@@ -147,7 +174,7 @@ export async function GET(
       WHERE id = $1 AND type='lesson'
       LIMIT 1
       `,
-      [lessonId]
+      [lessonId],
     );
     const lesson = lessonRes.rows[0];
     if (!lesson)
@@ -160,7 +187,7 @@ export async function GET(
       WHERE lesson_id = $1
       LIMIT 1
       `,
-      [lessonId]
+      [lessonId],
     );
     const setRow = setRes.rows[0] ?? {
       reference_post_id: null,
@@ -174,7 +201,7 @@ export async function GET(
       ? (
           await client.query(
             `SELECT id, title, content FROM public.posts WHERE id=$1 AND type='reference' LIMIT 1`,
-            [referenceId]
+            [referenceId],
           )
         ).rows[0]
       : null;
@@ -183,7 +210,7 @@ export async function GET(
       ? (
           await client.query(
             `SELECT id, title, content FROM public.posts WHERE id=$1 AND type='quiz' LIMIT 1`,
-            [quizId]
+            [quizId],
           )
         ).rows[0]
       : null;
@@ -197,7 +224,7 @@ export async function GET(
             WHERE post_id = $1
             ORDER BY order_index ASC
             `,
-            [quizId]
+            [quizId],
           )
         ).rows.map((r: any) => ({
           id: r.id,
@@ -206,8 +233,8 @@ export async function GET(
           options: Array.isArray(r.options)
             ? r.options
             : r.options
-            ? r.options
-            : [],
+              ? r.options
+              : [],
           correctAnswer: r.correct_answer,
           orderIndex: r.order_index,
         }))
@@ -262,7 +289,7 @@ export async function GET(
 
 export async function PUT(
   req: Request,
-  { params }: { params: { lessonId: string } | Promise<{ lessonId: string }> }
+  { params }: { params: { lessonId: string } | Promise<{ lessonId: string }> },
 ) {
   const user = await getCurrentUser();
   if (!user)
@@ -290,7 +317,7 @@ export async function PUT(
   ) {
     return NextResponse.json(
       { message: "Lesson title/content required" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -310,7 +337,7 @@ export async function PUT(
   if (hasRefAttachments && !isNonEmptyText(reference?.title)) {
     return NextResponse.json(
       { message: "Reference attachments require reference title" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -321,7 +348,7 @@ export async function PUT(
   ) {
     return NextResponse.json(
       { message: "Reference title/content must be both filled" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -331,21 +358,21 @@ export async function PUT(
   if (hasQuizAttachments && !isNonEmptyText(quiz?.title)) {
     return NextResponse.json(
       { message: "Quiz attachments require quiz title" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
   if (quiz && !hasQuiz && !hasQuizAttachments) {
     return NextResponse.json(
       { message: "Quiz title must be filled or quiz should be null" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
   if (hasQuiz && questions.length === 0) {
     return NextResponse.json(
       { message: "At least 1 question required when quiz reveals" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -353,7 +380,7 @@ export async function PUT(
     if (!isNonEmptyText(q.questionText))
       return NextResponse.json(
         { message: "Question text required" },
-        { status: 400 }
+        { status: 400 },
       );
     if (
       q.questionType !== "multiple_choice" &&
@@ -361,12 +388,12 @@ export async function PUT(
     )
       return NextResponse.json(
         { message: "Invalid questionType" },
-        { status: 400 }
+        { status: 400 },
       );
     if (!isNonEmptyText(q.correctAnswer))
       return NextResponse.json(
         { message: "Correct answer required" },
-        { status: 400 }
+        { status: 400 },
       );
 
     if (q.questionType === "multiple_choice") {
@@ -376,13 +403,13 @@ export async function PUT(
       if (opts.length < 2)
         return NextResponse.json(
           { message: "Multiple choice needs >= 2 options" },
-          { status: 400 }
+          { status: 400 },
         );
     }
   }
 
   const allIds = Array.from(
-    new Set([...lessonIds, ...referenceIds, ...quizIds])
+    new Set([...lessonIds, ...referenceIds, ...quizIds]),
   );
 
   const client = await pool.connect();
@@ -393,13 +420,13 @@ export async function PUT(
     if (allIds.length > 0) {
       const up = await client.query(
         `SELECT id FROM public.uploads WHERE id = ANY($1::bigint[])`,
-        [allIds]
+        [allIds],
       );
       if (up.rows.length !== allIds.length) {
         await client.query("ROLLBACK");
         return NextResponse.json(
           { message: "Some attachment uploadIds not found" },
-          { status: 400 }
+          { status: 400 },
         );
       }
     }
@@ -407,7 +434,7 @@ export async function PUT(
     // lesson 존재 확인
     const lessonRes = await client.query(
       `SELECT id FROM public.posts WHERE id=$1 AND type='lesson' LIMIT 1`,
-      [lessonId]
+      [lessonId],
     );
     if (lessonRes.rows.length === 0) {
       await client.query("ROLLBACK");
@@ -416,12 +443,17 @@ export async function PUT(
 
     const setRes = await client.query(
       `SELECT reference_post_id, quiz_post_id FROM public.lesson_sets WHERE lesson_id=$1 LIMIT 1`,
-      [lessonId]
+      [lessonId],
     );
     const setRow = setRes.rows[0] ?? {
       reference_post_id: null,
       quiz_post_id: null,
     };
+
+    // ✅ 기존 값 보관 (삭제 시 필요)
+    const oldReferenceId: number | null = setRow.reference_post_id;
+    const oldQuizId: number | null = setRow.quiz_post_id;
+
     let referenceId: number | null = setRow.reference_post_id;
     let quizId: number | null = setRow.quiz_post_id;
 
@@ -430,6 +462,11 @@ export async function PUT(
 
     if (!shouldHaveRef) {
       referenceId = null;
+
+      // ✅ 실제 reference post 삭제
+      if (oldReferenceId) {
+        await deleteReferencePostCascade(client, oldReferenceId);
+      }
     } else if (!referenceId) {
       const refInsert = await client.query<{ id: number }>(
         `
@@ -437,7 +474,7 @@ export async function PUT(
         VALUES ($1, $2, 'reference', NULL, $3)
         RETURNING id
         `,
-        [courseId, (reference?.title ?? "").trim(), reference?.content ?? ""]
+        [courseId, (reference?.title ?? "").trim(), reference?.content ?? ""],
       );
       referenceId = refInsert.rows[0].id;
     }
@@ -447,6 +484,11 @@ export async function PUT(
 
     if (!shouldHaveQuiz) {
       quizId = null;
+
+      // ✅ 실제 quiz post 삭제 + 문항/첨부 정리
+      if (oldQuizId) {
+        await deleteQuizPostCascade(client, oldQuizId);
+      }
     } else if (!quizId) {
       const quizInsert = await client.query<{ id: number }>(
         `
@@ -454,7 +496,7 @@ export async function PUT(
         VALUES ($1, $2, 'quiz', NULL, $3)
         RETURNING id
         `,
-        [courseId, (quiz?.title ?? "").trim(), quiz?.content ?? ""]
+        [courseId, (quiz?.title ?? "").trim(), quiz?.content ?? ""],
       );
       quizId = quizInsert.rows[0].id;
     }
@@ -472,7 +514,7 @@ export async function PUT(
         body.lesson.difficulty ?? null,
         body.lesson.content,
         lessonId,
-      ]
+      ],
     );
 
     if (referenceId && shouldHaveRef) {
@@ -487,7 +529,7 @@ export async function PUT(
           (reference?.title ?? "").trim(),
           reference?.content ?? "",
           referenceId,
-        ]
+        ],
       );
     }
 
@@ -498,7 +540,7 @@ export async function PUT(
         SET course_id=$1, title=$2, content=$3
         WHERE id=$4 AND type='quiz'
         `,
-        [courseId, (quiz?.title ?? "").trim(), quiz?.content ?? "", quizId]
+        [courseId, (quiz?.title ?? "").trim(), quiz?.content ?? "", quizId],
       );
     }
 
@@ -513,7 +555,7 @@ export async function PUT(
         quiz_post_id = EXCLUDED.quiz_post_id,
         updated_at = CURRENT_TIMESTAMP
       `,
-      [lessonId, referenceId, quizId]
+      [lessonId, referenceId, quizId],
     );
 
     // ✅ attachments replace (탭별)
@@ -558,7 +600,7 @@ export async function PUT(
             optionsJson,
             q.correctAnswer,
             q.orderIndex,
-          ]
+          ],
         );
       }
     }
@@ -569,7 +611,7 @@ export async function PUT(
     await client.query("ROLLBACK");
     return NextResponse.json(
       { message: e?.message ?? "Update failed" },
-      { status: 500 }
+      { status: 500 },
     );
   } finally {
     client.release();

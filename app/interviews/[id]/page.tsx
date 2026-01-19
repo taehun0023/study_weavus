@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
 
+import InterviewPages from "@/components/interview_pages";
+import TechStackInterviewQA from "@/components/TechStackInterviewQA";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
@@ -26,7 +28,9 @@ export default async function InterviewDetailPage({
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const p = (params as any)?.then ? await (params as Promise<{ id: string }>) : (params as any);
+  const p = (params as any)?.then
+    ? await (params as Promise<{ id: string }>)
+    : (params as any);
   const id = Number.parseInt(String(p?.id ?? ""), 10);
   if (!Number.isFinite(id) || id <= 0) redirect("/interviews");
 
@@ -39,6 +43,9 @@ export default async function InterviewDetailPage({
 
   const row = rows[0];
   if (!row) redirect("/interviews");
+
+  // ✅ "기술 질문" 글이면 기술 QA를 보여주기
+  const isTech = row.title?.includes("기술"); // 필요시 row.title === "기술 질문" 로 변경
 
   return (
     <div className="min-h-screen bg-background">
@@ -55,14 +62,12 @@ export default async function InterviewDetailPage({
         <Card className="border-border bg-card">
           <CardHeader>
             <CardTitle className="text-xl">{row.title}</CardTitle>
-            <div className="text-sm text-muted-foreground">
-              {new Date(row.created_at).toLocaleString()} {row.created_by ? `· ${row.created_by}` : ""}
+
+            {/* ✅ 공통/기술 질문 컴포넌트 분기 */}
+            <div className="container mx-auto px-4 py-6">
+              {isTech ? <TechStackInterviewQA /> : <InterviewPages />}
             </div>
           </CardHeader>
-          <CardContent className="prose prose-invert max-w-none">
-            {/* 기존 게시글 상세처럼 HTML/마크업이 들어올 수 있으니 그대로 렌더 */}
-            <div dangerouslySetInnerHTML={{ __html: row.content ?? "" }} />
-          </CardContent>
         </Card>
       </main>
     </div>

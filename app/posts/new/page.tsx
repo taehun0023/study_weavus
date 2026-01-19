@@ -23,7 +23,7 @@ export default async function NewPostPage({
   if (user.user_role !== "ADMIN") redirect("/posts");
 
   const params = (searchParams as any)?.then
-    ? await (searchParams as Promise<{ course?: string }> )
+    ? await (searchParams as Promise<{ course?: string }>)
     : (searchParams as any);
 
   const courses = await sql<CourseRow>`
@@ -33,10 +33,7 @@ export default async function NewPostPage({
   `;
 
   // Add virtual "interview" option to the same dropdown.
-  const coursesWithInterview: CourseRow[] = [
-    ...courses,
-    { id: INTERVIEW_COURSE_ID, name: "면접", slug: "interview" },
-  ];
+  const coursesWithInterview: CourseRow[] = [...courses];
 
   const initialCourseId =
     String(params?.course ?? "").toLowerCase() === "interview"
@@ -53,7 +50,10 @@ export default async function NewPostPage({
         </div>
 
         {/* One editor UI. Only the save target changes when course is "interview". */}
-        <LessonSetEditor courses={coursesWithInterview} initialCourseId={initialCourseId} />
+        <LessonSetEditor
+          courses={coursesWithInterview}
+          initialCourseId={initialCourseId}
+        />
       </main>
     </div>
   );

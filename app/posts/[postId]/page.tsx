@@ -54,7 +54,7 @@ function looksLikeHtml(s: string) {
 function stripLeadingEmptyBlocks(html: string) {
   return html.replace(
     /^(?:\s*<(p|div)>(?:\s|&nbsp;|<br\s*\/?>)*<\/\1>)+/gi,
-    ""
+    "",
   );
 }
 
@@ -214,8 +214,9 @@ export default async function PostDetailPage({
         `
       : [];
   const set = setRows?.[0];
-  const refId = post.type === "lesson" ? set?.reference_post_id ?? null : null;
-  const quizId = post.type === "lesson" ? set?.quiz_post_id ?? null : null;
+  const refId =
+    post.type === "lesson" ? (set?.reference_post_id ?? null) : null;
+  const quizId = post.type === "lesson" ? (set?.quiz_post_id ?? null) : null;
 
   const refPost =
     post.type === "lesson" && refId
@@ -244,6 +245,21 @@ export default async function PostDetailPage({
 
   const canGoBackToLesson = Number.isFinite(fromId) && fromId > 0;
 
+  function difficultyBadgeClass(difficulty: string) {
+    switch (difficulty) {
+      case "easy":
+        return "border-emerald-500/40 text-emerald-300 bg-emerald-500/10";
+      case "medium":
+        return "border-amber-500/40 text-amber-300 bg-amber-500/10";
+      case "hard":
+        return "border-rose-500/40 text-rose-300 bg-rose-500/10";
+      case "project":
+        return "border-violet-500/40 text-violet-300 bg-violet-500/10";
+      default:
+        return "border-border text-foreground bg-transparent";
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader user={user} />
@@ -259,7 +275,12 @@ export default async function PostDetailPage({
           <Badge variant="secondary">{post.course_name}</Badge>
 
           {shouldShowDifficulty(post.type) && post.difficulty && (
-            <Badge variant="outline">
+            <Badge
+              variant="outline"
+              className={difficultyBadgeClass(
+                post.difficulty === "hard" ? "project" : post.difficulty,
+              )}
+            >
               {post.difficulty === "hard" ? "project" : post.difficulty}
             </Badge>
           )}

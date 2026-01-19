@@ -21,13 +21,16 @@ export default function QuizRenderer({
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  // ✅ multiple_choice는 "옵션 index"를 저장 (중복 옵션 텍스트 문제 방지)
+  // - multiple_choice: number (0,1,2...)
+  // - short_answer: string
+  const [answers, setAnswers] = useState<Record<string, any>>({});
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const questionOrder = useMemo(
     () => questions.map((q) => Number(q.id)).filter((n) => Number.isFinite(n)),
-    [questions]
+    [questions],
   );
 
   const canSubmit = useMemo(() => questions.length > 0, [questions.length]);
@@ -50,7 +53,6 @@ export default function QuizRenderer({
         body: JSON.stringify(payload),
       });
 
-      // ✅ 응답이 JSON이 아닐 수도 있으니 방어
       const text = await res.text();
       let data: any = null;
       try {
@@ -71,8 +73,6 @@ export default function QuizRenderer({
         return;
       }
 
-      // ✅ 성공하면 결과 페이지로 이동
-      // 기존에 from(lessonId) 쿼리가 있으면 그대로 넘김
       const from = searchParams.get("from");
       const qs = from ? `?from=${encodeURIComponent(from)}` : "";
       router.push(`/quiz/${quizId}/result/${attemptId}${qs}`);
@@ -92,42 +92,53 @@ export default function QuizRenderer({
         </div>
       ) : null}
 
-      {questions.map((q, idx) => (
-        <div
-          key={q.id}
-          className="rounded-xl border border-white/10 bg-white/5 p-4"
-        >
-          <div className="text-sm font-semibold mb-2">
-            Q{idx + 1}. {q.questionText}
-          </div>
+      {questions.map((q, idx) => {
+        const selectedIndex =
+          typeof answers[q.id] === "number" ? (answers[q.id] as number) : -1;
 
-          {q.questionType === "multiple_choice" ? (
-            <div className="space-y-2">
-              {(q.options ?? []).map((opt, i) => (
-                <label key={i} className="flex items-start gap-2 text-sm">
-                  <input
-                    type="radio"
-                    name={`q-${q.id}`}
-                    checked={answers[q.id] === opt}
-                    onChange={() => setAnswers((p) => ({ ...p, [q.id]: opt }))}
-                    className="mt-[3px]"
-                  />
-                  <span>{opt}</span>
-                </label>
-              ))}
+        return (
+          <div
+            key={q.id}
+            className="rounded-xl border border-white/10 bg-white/5 p-4"
+          >
+            <div className="text-sm font-semibold mb-2">
+              Q{idx + 1}. {q.questionText}
             </div>
-          ) : (
-            <textarea
-              className="mt-2 w-full min-h-[88px] rounded-lg bg-black/20 border border-white/10 p-2 text-sm outline-none"
-              value={answers[q.id] ?? ""}
-              onChange={(e) =>
-                setAnswers((p) => ({ ...p, [q.id]: e.target.value }))
-              }
-              placeholder="정답을 입력하세요"
-            />
-          )}
-        </div>
-      ))}
+
+            {q.questionType === "multiple_choice" ? (
+              <div className="space-y-2">
+                {(q.options ?? []).map((opt, i) => (
+                  <label key={i} className="flex items-start gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name={`q-${q.id}`}
+                      value={String(i)}
+                      checked={selectedIndex === i}
+                      onChange={() =>
+                        setAnswers((p) => ({
+                          ...p,
+                          [q.id]: i, // ✅ index 저장
+                        }))
+                      }
+                      className="mt-[3px]"
+                    />
+                    <span>{opt}</span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <textarea
+                className="mt-2 w-full min-h-[88px] rounded-lg bg-black/20 border border-white/10 p-2 text-sm outline-none"
+                value={typeof answers[q.id] === "string" ? answers[q.id] : ""}
+                onChange={(e) =>
+                  setAnswers((p) => ({ ...p, [q.id]: e.target.value }))
+                }
+                placeholder="정답을 입력하세요"
+              />
+            )}
+          </div>
+        );
+      })}
 
       <Button
         className="w-full"

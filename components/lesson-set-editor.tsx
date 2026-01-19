@@ -86,7 +86,7 @@ function AttachmentBox({
             ref={inputRef}
             type="file"
             multiple
-            accept=".zip,.tar,.gz,.tgz,.7z,.rar,.pdf,.txt,.md,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.mp3,.mp4,*/*"
+            accept=".zip,.tar,.gz,.tgz,.7z,.rar,.pdf,.txt,.md,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.mp3,.mp4,.html*/*"
             onChange={(e) => onPick(e.target.files)}
             className="hidden"
           />
@@ -151,10 +151,18 @@ function AttachmentBox({
   );
 }
 
-export default function LessonSetEditor({ courses, initialCourseId }: { courses: Course[]; initialCourseId?: number }) {
+export default function LessonSetEditor({
+  courses,
+  initialCourseId,
+}: {
+  courses: Course[];
+  initialCourseId?: number;
+}) {
   const router = useRouter();
   const safeCourses = Array.isArray(courses) ? courses : [];
-  const [courseId, setCourseId] = useState<number>(initialCourseId ?? safeCourses[0]?.id ?? 0);
+  const [courseId, setCourseId] = useState<number>(
+    initialCourseId ?? safeCourses[0]?.id ?? 0,
+  );
 
   // lesson
   const [lessonTitle, setLessonTitle] = useState("");
@@ -277,15 +285,15 @@ export default function LessonSetEditor({ courses, initialCourseId }: { courses:
 
   function updateQuestion(idx: number, patch: Partial<Q>) {
     setQuestions((prev) =>
-      prev.map((q, i) => (i === idx ? { ...q, ...patch } : q))
+      prev.map((q, i) => (i === idx ? { ...q, ...patch } : q)),
     );
   }
 
   function addOption(idx: number) {
     setQuestions((prev) =>
       prev.map((q, i) =>
-        i === idx ? { ...q, options: [...q.options, ""] } : q
-      )
+        i === idx ? { ...q, options: [...q.options, ""] } : q,
+      ),
     );
   }
 
@@ -302,7 +310,7 @@ export default function LessonSetEditor({ courses, initialCourseId }: { courses:
         const nextCorrect = q.correctAnswer === removing ? "" : q.correctAnswer;
 
         return { ...q, options: nextOpts, correctAnswer: nextCorrect };
-      })
+      }),
     );
   }
 
@@ -310,7 +318,7 @@ export default function LessonSetEditor({ courses, initialCourseId }: { courses:
     files: FileList | null,
     setUploading: (b: boolean) => void,
     setUploads: React.Dispatch<React.SetStateAction<UploadedFile[]>>,
-    inputRef: React.RefObject<HTMLInputElement | null>
+    inputRef: React.RefObject<HTMLInputElement | null>,
   ) {
     if (!files || files.length === 0) return;
 
@@ -355,7 +363,7 @@ export default function LessonSetEditor({ courses, initialCourseId }: { courses:
     const links = uploads
       .map(
         (u) =>
-          `<p><a href="${u.url}" target="_blank" rel="noopener noreferrer">${u.name}</a></p>`
+          `<p><a href="${u.url}" target="_blank" rel="noopener noreferrer">${u.name}</a></p>`,
       )
       .join("");
     setter((prev: string) => (prev || "") + links);
@@ -403,7 +411,6 @@ export default function LessonSetEditor({ courses, initialCourseId }: { courses:
         },
       };
 
-
       // Interview posts are stored separately (courseId = -1).
       if (courseId === -1) {
         const res = await fetch("/api/interviews", {
@@ -419,7 +426,9 @@ export default function LessonSetEditor({ courses, initialCourseId }: { courses:
         }
 
         const id = Number(data?.id);
-        router.push(Number.isFinite(id) && id > 0 ? `/interviews/${id}` : "/interviews");
+        router.push(
+          Number.isFinite(id) && id > 0 ? `/interviews/${id}` : "/interviews",
+        );
         router.refresh();
         return;
       }
@@ -508,7 +517,7 @@ export default function LessonSetEditor({ courses, initialCourseId }: { courses:
                   files,
                   setUploadingLesson,
                   setLessonUploads,
-                  lessonFileRef
+                  lessonFileRef,
                 )
               }
               onInsertLinks={() => insertLinks(lessonUploads, setLessonContent)}
@@ -571,7 +580,7 @@ export default function LessonSetEditor({ courses, initialCourseId }: { courses:
                   files,
                   setUploadingQuiz,
                   setQuizUploads,
-                  quizFileRef
+                  quizFileRef,
                 )
               }
               onInsertLinks={() => insertLinks(quizUploads, setQuizContent)}
