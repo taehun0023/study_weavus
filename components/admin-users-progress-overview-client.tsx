@@ -86,7 +86,7 @@ function DatePickerButton({
           variant="outline"
           className={cn(
             "h-9 w-[170px] justify-start rounded-xl border-white/10 bg-white/5 text-left font-normal",
-            !value && "text-muted-foreground"
+            !value && "text-muted-foreground",
           )}
         >
           {value ? displayKoreanDate(value) : placeholder}
@@ -263,7 +263,7 @@ export default function AdminUsersProgressOverviewClient() {
 
   return (
     <Card className="overflow-hidden">
-      <CardHeader className="space-y-4">
+      <CardHeader className="space-y-4 pb-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <CardTitle className="text-base">전체 유저 진척도</CardTitle>
