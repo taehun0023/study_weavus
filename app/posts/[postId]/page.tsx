@@ -16,6 +16,7 @@ import DashboardHeader from "@/components/dashboard-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import HighlightOnView from "@/components/highlight-on-view";
 
 type Difficulty = "easy" | "medium" | "hard" | "project" | null;
 type PostType = "lesson" | "reference" | "quiz";
@@ -48,6 +49,43 @@ type AttachmentRow = {
 
 function looksLikeHtml(s: string) {
   return /<\/?[a-z][\s\S]*>/i.test(s);
+}
+
+function stripLeadingEmptyBlocks(html: string) {
+  return html.replace(
+    /^(?:\s*<(p|div)>(?:\s|&nbsp;|<br\s*\/?>)*<\/\1>)+/gi,
+    ""
+  );
+}
+
+function sanitizeQuillHtml(raw: string) {
+  const cleaned = stripLeadingEmptyBlocks(raw);
+
+  return sanitizeHtml(cleaned, {
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat([
+      "img",
+      "pre",
+      "code",
+      "span",
+      "ol",
+      "ul",
+      "li",
+      "h1",
+      "h2",
+      "h3",
+      "hr",
+    ]),
+    allowedAttributes: {
+      a: ["href", "target", "rel"],
+      img: ["src", "alt", "title", "width", "height"],
+      pre: ["class", "data-language"],
+      code: ["class", "data-language"],
+      li: ["class", "data-list"],
+      span: ["class"],
+      "*": ["style", "class", "data-list", "data-language"],
+    },
+    allowedSchemes: ["http", "https", "data"],
+  });
 }
 
 function shouldShowDifficulty(type: PostType) {
@@ -191,7 +229,6 @@ export default async function PostDetailPage({
         )[0]
       : null;
 
-  // ✅ 첨부파일: 상세페이지에서는 lesson + reference만 표시 (quiz는 quiz 페이지에서만)
   const lessonAttachments =
     post.type === "lesson" ? await fetchAttachments(post.id) : [];
 
@@ -203,17 +240,7 @@ export default async function PostDetailPage({
 
   const raw = post.content ?? "";
   const isHtml = looksLikeHtml(raw);
-  const safeHtml = isHtml
-    ? sanitizeHtml(raw, {
-        allowedTags: sanitizeHtml.defaults.allowedTags.concat(["img"]),
-        allowedAttributes: {
-          a: ["href", "target", "rel"],
-          img: ["src", "alt", "title", "width", "height"],
-          "*": ["style"],
-        },
-        allowedSchemes: ["http", "https", "data"],
-      })
-    : "";
+  const safeHtml = isHtml ? sanitizeQuillHtml(raw) : "";
 
   const canGoBackToLesson = Number.isFinite(fromId) && fromId > 0;
 
@@ -221,8 +248,10 @@ export default async function PostDetailPage({
     <div className="min-h-screen bg-background">
       <DashboardHeader user={user} />
 
-      <main className="container mx-auto px-4 py-8 space-y-6">
-        <div className="flex flex-wrap items-center gap-2">
+      {/* ✅ main 간격(space-y-6) 제거: 여기서 큰 간격이 쌓였음 */}
+      <main className="container mx-auto px-4 py-8">
+        {/* ✅ 상단 버튼/배지 영역은 margin만 최소로 */}
+        <div className="flex flex-wrap items-center gap-2 mb-4">
           <Button asChild variant="ghost" className="pl-0">
             <Link href={`/posts?course=${post.course_slug}`}>← 목록으로</Link>
           </Button>
@@ -237,13 +266,14 @@ export default async function PostDetailPage({
         </div>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-3">
             <CardTitle className="text-2xl">{post.title}</CardTitle>
-            <hr className="mt-3 mb-6 border-white/10" />
+            {/* ✅ 여기 마진이 “보라색” 주범이었음 */}
+            <hr className="mt-3 mb-0 border-white/10" />
           </CardHeader>
 
-          <CardContent className="space-y-6">
-            {/* 본문 */}
+          {/* ✅ CardContent의 space-y-6 제거 → 필요한 곳만 mt로 제어 */}
+          <CardContent className="pt-4">
             <div className="prose prose-invert max-w-none">
               {isHtml ? (
                 <div dangerouslySetInnerHTML={{ __html: safeHtml }} />
@@ -252,25 +282,30 @@ export default async function PostDetailPage({
               )}
             </div>
 
-            {/* reference/quiz 페이지를 직접 열었을 때(lesson이 아닐 때) 첨부 표시 */}
+            <div className="mt-4">
+              <HighlightOnView selector=".prose" />
+            </div>
+
             {post.type !== "lesson" ? (
-              <AttachmentsBlock
-                title="첨부파일"
-                attachments={currentAttachments}
-              />
+              <div className="mt-5">
+                <AttachmentsBlock
+                  title="첨부파일"
+                  attachments={currentAttachments}
+                />
+              </div>
             ) : null}
 
-            {/* ✅ 수업(lesson) 첨부파일 */}
             {post.type === "lesson" ? (
-              <AttachmentsBlock
-                title="수업 첨부파일"
-                attachments={lessonAttachments}
-              />
+              <div className="mt-5">
+                <AttachmentsBlock
+                  title="수업 첨부파일"
+                  attachments={lessonAttachments}
+                />
+              </div>
             ) : null}
 
-            {/* 버튼 영역 */}
             {post.type === "lesson" ? (
-              <div className="flex flex-wrap gap-3 pt-2">
+              <div className="flex flex-wrap gap-3 mt-5">
                 {canGoBackToLesson && (
                   <Button asChild variant="secondary">
                     <Link href={`/posts/${fromId}`}>수업내용으로</Link>
@@ -295,9 +330,8 @@ export default async function PostDetailPage({
               </div>
             ) : null}
 
-            {/* ✅ 인라인 참조자료 + 참조 첨부파일 */}
             {post.type === "lesson" && refPost ? (
-              <div className="pt-2">
+              <div className="mt-6">
                 <div className="text-xs text-muted-foreground mb-2">
                   참조자료
                 </div>
@@ -310,17 +344,9 @@ export default async function PostDetailPage({
                       const rawRef = refPost.content ?? "";
                       const isHtmlRef = looksLikeHtml(rawRef);
                       const safeRefHtml = isHtmlRef
-                        ? sanitizeHtml(rawRef, {
-                            allowedTags:
-                              sanitizeHtml.defaults.allowedTags.concat(["img"]),
-                            allowedAttributes: {
-                              a: ["href", "target", "rel"],
-                              img: ["src", "alt", "title", "width", "height"],
-                              "*": ["style"],
-                            },
-                            allowedSchemes: ["http", "https", "data"],
-                          })
+                        ? sanitizeQuillHtml(rawRef)
                         : "";
+
                       return isHtmlRef ? (
                         <div
                           dangerouslySetInnerHTML={{ __html: safeRefHtml }}
@@ -333,7 +359,6 @@ export default async function PostDetailPage({
                     })()}
                   </div>
 
-                  {/* ✅ 참조(reference) 첨부파일 */}
                   <div className="mt-6">
                     <AttachmentsBlock
                       title="참조자료 첨부파일"
@@ -344,9 +369,8 @@ export default async function PostDetailPage({
               </div>
             ) : null}
 
-            {/* 안내 문구 */}
             {post.type === "lesson" && (refId === null || quizId === null) ? (
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-muted-foreground mt-4">
                 {refId === null ? "참조자료가 없습니다. " : ""}
                 {quizId === null ? "문제풀이가 없습니다." : ""}
               </div>

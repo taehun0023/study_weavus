@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent } from "@/components/ui/card";
 
 import QuillEditor from "@/components/quill-editor";
 
@@ -168,8 +169,8 @@ function AttachmentBox({
   inputRef: React.RefObject<HTMLInputElement | null>;
 }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="rounded-xl border border-border bg-background/30 p-4 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="font-semibold">{title} 첨부파일</div>
           <div className="text-xs text-muted-foreground">
@@ -193,7 +194,7 @@ function AttachmentBox({
             onClick={() => inputRef.current?.click()}
             disabled={uploading}
           >
-            {uploading ? "업로드 중..." : "파일 첨부"}
+            {uploading ? "업로드 중..." : "파일 선택"}
           </Button>
 
           <Button
@@ -216,7 +217,7 @@ function AttachmentBox({
           {uploads.map((u) => (
             <div
               key={u.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/10 px-3 py-2"
+              className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background/40 px-3 py-2"
             >
               <div className="min-w-0">
                 <div className="truncate text-sm">{u.name}</div>
@@ -435,7 +436,7 @@ export default function LessonSetEditorEdit({
     files: FileList | null,
     setUploading: (b: boolean) => void,
     setUploads: React.Dispatch<React.SetStateAction<UploadedFile[]>>,
-    inputRef: React.RefObject<HTMLInputElement | null>
+    inputRef: React.RefObject<HTMLInputElement | null>,
   ) {
     if (!files || files.length === 0) return;
 
@@ -480,7 +481,7 @@ export default function LessonSetEditorEdit({
     const links = uploads
       .map(
         (u) =>
-          `<p><a href="${u.url}" target="_blank" rel="noopener noreferrer">${u.name}</a></p>`
+          `<p><a href="${u.url}" target="_blank" rel="noopener noreferrer">${u.name}</a></p>`,
       )
       .join("");
     setter((prev: string) => (prev || "") + links);
@@ -506,7 +507,7 @@ export default function LessonSetEditorEdit({
 
   function updateQuestion(id: string, patch: Partial<QuizQuestionUI>) {
     setQuestions((prev) =>
-      prev.map((q) => (q.id === id ? { ...q, ...patch } : q))
+      prev.map((q) => (q.id === id ? { ...q, ...patch } : q)),
     );
   }
 
@@ -523,15 +524,15 @@ export default function LessonSetEditorEdit({
           q.correctAnswer === prevText ? value : q.correctAnswer;
 
         return { ...q, choices: next, correctAnswer: nextCorrect };
-      })
+      }),
     );
   }
 
   function addChoice(qid: string) {
     setQuestions((prev) =>
       prev.map((q) =>
-        q.id === qid ? { ...q, choices: [...(q.choices ?? []), ""] } : q
-      )
+        q.id === qid ? { ...q, choices: [...(q.choices ?? []), ""] } : q,
+      ),
     );
   }
 
@@ -547,7 +548,7 @@ export default function LessonSetEditorEdit({
         const nextCorrect = q.correctAnswer === removing ? "" : q.correctAnswer;
 
         return { ...q, choices: next, correctAnswer: nextCorrect };
-      })
+      }),
     );
   }
 
@@ -602,25 +603,29 @@ export default function LessonSetEditorEdit({
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div className="text-sm text-muted-foreground">불러오는 중...</div>
-      </div>
+      <Card className="border-border bg-card">
+        <CardContent className="p-6">
+          <div className="text-sm text-muted-foreground">불러오는 중...</div>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-      {error ? <div className="mb-4 text-sm text-red-500">{error}</div> : null}
+    <Card className="border-border bg-card">
+      <CardContent className="p-6 space-y-5">
+        {error ? (
+          <div className="mb-4 text-sm text-red-500">{error}</div>
+        ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="flex items-center gap-3">
-          <div className="w-[60px] text-sm text-muted-foreground">과목</div>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="text-sm text-muted-foreground">과목</div>
           <div className="w-[220px]">
             <Select
               value={String(courseId)}
-              onValueChange={(v) => setCourseId(Number(v))}
+              onValueChange={(v) => { const id = Number(v); if (id === -1) { router.push("/posts/new?course=interview"); return; } setCourseId(id); }}
             >
-              <SelectTrigger className="rounded-xl bg-black/20">
+              <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -632,18 +637,14 @@ export default function LessonSetEditorEdit({
               </SelectContent>
             </Select>
           </div>
-        </div>
 
-        <div className="flex items-center gap-3">
-          <div className="w-[110px] text-sm text-muted-foreground">
-            난이도(lesson)
-          </div>
-          <div className="w-[220px]">
+          <div className="text-sm text-muted-foreground">난이도(lesson)</div>
+          <div className="w-[160px]">
             <Select
               value={difficulty}
               onValueChange={(v) => setDifficulty(normalizeDifficulty(v))}
             >
-              <SelectTrigger className="rounded-xl bg-black/20">
+              <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -654,381 +655,326 @@ export default function LessonSetEditorEdit({
             </Select>
           </div>
         </div>
-      </div>
 
-      <div className="mt-6">
         <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
-          <TabsList className="grid w-full grid-cols-3 rounded-xl bg-black/20">
-            <TabsTrigger value="lesson" className="rounded-lg">
-              수업(lesson)
-            </TabsTrigger>
-            <TabsTrigger value="reference" className="rounded-lg">
-              참조(reference)
-            </TabsTrigger>
-            <TabsTrigger value="quiz" className="rounded-lg">
-              문제(quiz)
-            </TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="lesson">수업(lesson)</TabsTrigger>
+            <TabsTrigger value="reference">참조(reference)</TabsTrigger>
+            <TabsTrigger value="quiz">문제(quiz)</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="lesson" className="pt-6">
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <div className="text-sm text-muted-foreground">수업 제목</div>
-                <Input
-                  value={lessonTitle}
-                  onChange={(e) => setLessonTitle(e.target.value)}
-                  className="h-11 rounded-xl bg-black/20"
-                  placeholder="수업 제목"
-                />
-              </div>
+          <TabsContent value="lesson" className="space-y-3 pt-4">
+            <div className="text-sm text-muted-foreground">수업 제목</div>
+            <Input
+              value={lessonTitle}
+              onChange={(e) => setLessonTitle(e.target.value)}
+              placeholder="수업 제목"
+            />
 
-              <AttachmentBox
-                title="수업"
-                uploads={lessonUploads}
-                uploading={uploadingLesson}
-                inputRef={lessonFileRef}
-                onPick={(files) =>
-                  uploadFiles(
-                    files,
-                    setUploadingLesson,
-                    setLessonUploads,
-                    lessonFileRef
-                  )
-                }
-                onInsertLinks={() =>
-                  insertLinks(lessonUploads, setLessonContent)
-                }
-                onRemove={(id) =>
-                  setLessonUploads((p) => p.filter((x) => x.id !== id))
-                }
-              />
+            <AttachmentBox
+              title="수업"
+              uploads={lessonUploads}
+              uploading={uploadingLesson}
+              inputRef={lessonFileRef}
+              onPick={(files) =>
+                uploadFiles(
+                  files,
+                  setUploadingLesson,
+                  setLessonUploads,
+                  lessonFileRef,
+                )
+              }
+              onInsertLinks={() => insertLinks(lessonUploads, setLessonContent)}
+              onRemove={(id) =>
+                setLessonUploads((p) => p.filter((x) => x.id !== id))
+              }
+            />
 
-              <div className="space-y-2">
-                <div className="text-sm text-muted-foreground">수업 내용</div>
-                <div className="rounded-xl border border-white/10 bg-black/20 p-2">
-                  <QuillEditor
-                    value={lessonContent}
-                    onChange={setLessonContent}
-                  />
-                </div>
-              </div>
+            <div className="text-sm text-muted-foreground pt-2">수업 내용</div>
+            <QuillEditor value={lessonContent} onChange={setLessonContent} />
 
-              <Button
-                className="h-12 w-full rounded-xl"
-                onClick={onSave}
-                disabled={!canSave}
-              >
-                {saving ? "저장 중..." : "세트 수정 저장"}
-              </Button>
-            </div>
+            <Button
+              className="h-12 w-full"
+              onClick={onSave}
+              disabled={!canSave}
+            >
+              {saving ? "저장 중..." : "세트 수정 저장"}
+            </Button>
           </TabsContent>
 
-          <TabsContent value="reference" className="pt-6">
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <div className="text-sm text-muted-foreground">
-                  참조자료 제목
-                </div>
-                <Input
-                  value={referenceTitle}
-                  onChange={(e) => setReferenceTitle(e.target.value)}
-                  className="h-11 rounded-xl bg-black/20"
-                  placeholder="참조자료 제목 (첨부가 있으면 제목 필요)"
-                />
-              </div>
+          <TabsContent value="reference" className="space-y-3 pt-4">
+            <div className="text-sm text-muted-foreground">참조자료 제목</div>
+            <Input
+              value={referenceTitle}
+              onChange={(e) => setReferenceTitle(e.target.value)}
+              placeholder="예: 추가 설명/링크/요약 (첨부가 있으면 제목 필요)"
+            />
 
-              <AttachmentBox
-                title="참조"
-                uploads={refUploads}
-                uploading={uploadingRef}
-                inputRef={refFileRef}
-                onPick={(files) =>
-                  uploadFiles(files, setUploadingRef, setRefUploads, refFileRef)
-                }
-                onInsertLinks={() =>
-                  insertLinks(refUploads, setReferenceContent)
-                }
-                onRemove={(id) =>
-                  setRefUploads((p) => p.filter((x) => x.id !== id))
-                }
-              />
+            <AttachmentBox
+              title="참조"
+              uploads={refUploads}
+              uploading={uploadingRef}
+              inputRef={refFileRef}
+              onPick={(files) =>
+                uploadFiles(files, setUploadingRef, setRefUploads, refFileRef)
+              }
+              onInsertLinks={() => insertLinks(refUploads, setReferenceContent)}
+              onRemove={(id) =>
+                setRefUploads((p) => p.filter((x) => x.id !== id))
+              }
+            />
 
-              <div className="space-y-2">
-                <div className="text-sm text-muted-foreground">
-                  참조자료 내용
-                </div>
-                <div className="rounded-xl border border-white/10 bg-black/20 p-2">
-                  <QuillEditor
-                    value={referenceContent}
-                    onChange={setReferenceContent}
-                  />
-                </div>
-
-                {referenceHalfFilled ? (
-                  <div className="text-xs text-red-500">
-                    참조자료는 제목과 내용을 둘 다 입력하거나, 둘 다 비워야
-                    합니다.
-                  </div>
-                ) : null}
-              </div>
-
-              <Button
-                className="h-12 w-full rounded-xl"
-                onClick={onSave}
-                disabled={!canSave}
-              >
-                {saving ? "저장 중..." : "세트 수정 저장"}
-              </Button>
+            <div className="text-sm text-muted-foreground pt-2">
+              참조자료 내용
             </div>
+            <QuillEditor
+              value={referenceContent}
+              onChange={setReferenceContent}
+            />
+
+            {referenceHalfFilled ? (
+              <div className="text-xs text-red-500">
+                참조자료는 제목과 내용을 둘 다 입력하거나, 둘 다 비워야 합니다.
+              </div>
+            ) : null}
+
+            <Button
+              className="h-12 w-full"
+              onClick={onSave}
+              disabled={!canSave}
+            >
+              {saving ? "저장 중..." : "세트 수정 저장"}
+            </Button>
           </TabsContent>
 
-          <TabsContent value="quiz" className="pt-6">
-            <div className="space-y-6">
-              <div className="space-y-2">
+          <TabsContent value="quiz" className="space-y-3 pt-4">
+            <div className="text-sm text-muted-foreground">문제풀이 제목</div>
+            <Input
+              value={quizTitle}
+              onChange={(e) => setQuizTitle(e.target.value)}
+              placeholder="문제풀이 제목 (첨부가 있으면 제목 필요)"
+            />
+
+            <AttachmentBox
+              title="문제풀이"
+              uploads={quizUploads}
+              uploading={uploadingQuiz}
+              inputRef={quizFileRef}
+              onPick={(files) =>
+                uploadFiles(
+                  files,
+                  setUploadingQuiz,
+                  setQuizUploads,
+                  quizFileRef,
+                )
+              }
+              onInsertLinks={() => insertLinks(quizUploads, setQuizIntro)}
+              onRemove={(id) =>
+                setQuizUploads((p) => p.filter((x) => x.id !== id))
+              }
+            />
+
+            <div className="text-sm text-muted-foreground pt-2">
+              문제풀이 안내/설명(선택)
+            </div>
+            <QuillEditor value={quizIntro} onChange={setQuizIntro} />
+
+            <div className="pt-2 flex items-center justify-between">
+              <div className="font-semibold">문항</div>
+              <Button variant="secondary" type="button" onClick={onAddQuestion}>
+                + 문항 추가
+              </Button>
+            </div>
+
+            <div className="space-y-4">
+              {questions.length === 0 ? (
                 <div className="text-sm text-muted-foreground">
-                  문제풀이 제목
+                  문항이 없습니다. (퀴즈 제목이 있으면 1개 이상 필요)
                 </div>
-                <Input
-                  value={quizTitle}
-                  onChange={(e) => setQuizTitle(e.target.value)}
-                  className="h-11 rounded-xl bg-black/20"
-                  placeholder="문제풀이 제목 (첨부가 있으면 제목 필요)"
-                />
-              </div>
+              ) : (
+                <div className="space-y-4">
+                  {questions.map((q, idx) => (
+                    <div
+                      key={q.id}
+                      className="rounded-lg border border-border p-4 space-y-3"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-semibold">Q{idx + 1}</div>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          type="button"
+                          onClick={() => onRemoveQuestion(q.id)}
+                        >
+                          삭제
+                        </Button>
+                      </div>
 
-              <AttachmentBox
-                title="문제풀이"
-                uploads={quizUploads}
-                uploading={uploadingQuiz}
-                inputRef={quizFileRef}
-                onPick={(files) =>
-                  uploadFiles(
-                    files,
-                    setUploadingQuiz,
-                    setQuizUploads,
-                    quizFileRef
-                  )
-                }
-                onInsertLinks={() => insertLinks(quizUploads, setQuizIntro)}
-                onRemove={(id) =>
-                  setQuizUploads((p) => p.filter((x) => x.id !== id))
-                }
-              />
-
-              <div className="space-y-2">
-                <div className="text-sm text-muted-foreground">
-                  문제풀이 안내/설명(선택)
-                </div>
-                <div className="rounded-xl border border-white/10 bg-black/20 p-2">
-                  <QuillEditor value={quizIntro} onChange={setQuizIntro} />
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium">문항</div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    type="button"
-                    onClick={onAddQuestion}
-                  >
-                    + 문항 추가
-                  </Button>
-                </div>
-
-                {questions.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">
-                    문항이 없습니다. (퀴즈 제목이 있으면 1개 이상 필요)
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {questions.map((q, idx) => (
-                      <div
-                        key={q.id}
-                        className="rounded-xl border border-white/10 bg-black/20 p-3"
-                      >
-                        <div className="mb-2 flex items-center justify-between">
-                          <div className="text-sm font-medium">
-                            문항 {idx + 1}
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            type="button"
-                            onClick={() => onRemoveQuestion(q.id)}
+                      <div className="space-y-2">
+                        <div className="text-sm text-muted-foreground">
+                          문항 타입
+                        </div>
+                        <div className="w-[240px]">
+                          <Select
+                            value={q.questionType}
+                            onValueChange={(v) => {
+                              const t = v as QuestionType;
+                              if (t === "multiple_choice") {
+                                updateQuestion(q.id, {
+                                  questionType: "multiple_choice",
+                                  choices: q.choices?.length
+                                    ? q.choices
+                                    : ["", ""],
+                                  correctAnswer: "",
+                                });
+                              } else {
+                                updateQuestion(q.id, {
+                                  questionType: "short_answer",
+                                  choices: [],
+                                  correctAnswer: "",
+                                });
+                              }
+                            }}
                           >
-                            삭제
-                          </Button>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="multiple_choice">
+                                객관식
+                              </SelectItem>
+                              <SelectItem value="short_answer">
+                                주관식
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
+                      </div>
 
-                        <div className="space-y-2">
-                          <div className="text-sm text-muted-foreground">
-                            문항 타입
-                          </div>
-                          <div className="w-[240px]">
-                            <Select
-                              value={q.questionType}
-                              onValueChange={(v) => {
-                                const t = v as QuestionType;
-                                if (t === "multiple_choice") {
-                                  updateQuestion(q.id, {
-                                    questionType: "multiple_choice",
-                                    choices: q.choices?.length
-                                      ? q.choices
-                                      : ["", ""],
-                                    correctAnswer: "",
-                                  });
-                                } else {
-                                  updateQuestion(q.id, {
-                                    questionType: "short_answer",
-                                    choices: [],
-                                    correctAnswer: "",
-                                  });
-                                }
-                              }}
+                      <div className="mt-3 space-y-2">
+                        <div className="text-sm text-muted-foreground">
+                          질문
+                        </div>
+                        <Textarea
+                          value={q.prompt}
+                          onChange={(e) =>
+                            updateQuestion(q.id, { prompt: e.target.value })
+                          }
+                          placeholder="질문을 입력하세요"
+                          className="min-h-[96px] rounded-xl bg-black/20"
+                        />
+                      </div>
+
+                      {q.questionType === "multiple_choice" ? (
+                        <div className="mt-4 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm text-muted-foreground">
+                              선택지 (정답은 라디오)
+                            </div>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              type="button"
+                              onClick={() => addChoice(q.id)}
                             >
-                              <SelectTrigger className="rounded-xl bg-black/20">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="multiple_choice">
-                                  객관식
-                                </SelectItem>
-                                <SelectItem value="short_answer">
-                                  주관식
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
+                              + 선택지
+                            </Button>
+                          </div>
+
+                          <div className="space-y-2">
+                            {q.choices.map((c, cIdx) => {
+                              const checked =
+                                q.correctAnswer !== "" && q.correctAnswer === c;
+                              return (
+                                <div
+                                  key={`${q.id}_${cIdx}`}
+                                  className="flex items-center gap-3"
+                                >
+                                  <label className="flex items-center gap-2 text-sm text-muted-foreground w-[90px]">
+                                    <input
+                                      type="radio"
+                                      name={`correct-${q.id}`}
+                                      checked={checked}
+                                      onChange={() =>
+                                        updateQuestion(q.id, {
+                                          correctAnswer: c,
+                                        })
+                                      }
+                                    />
+                                    정답
+                                  </label>
+
+                                  <Input
+                                    value={c}
+                                    onChange={(e) =>
+                                      updateChoice(q.id, cIdx, e.target.value)
+                                    }
+                                    className="h-10 rounded-xl bg-black/20 flex-1"
+                                    placeholder={`선택지 ${cIdx + 1}`}
+                                  />
+
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    type="button"
+                                    onClick={() => removeChoice(q.id, cIdx)}
+                                  >
+                                    삭제
+                                  </Button>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          <div className="text-xs text-muted-foreground">
+                            ※ 정답은 “선택지 텍스트”로 저장됩니다.
                           </div>
                         </div>
-
-                        <div className="mt-3 space-y-2">
+                      ) : (
+                        <div className="mt-4 space-y-2">
                           <div className="text-sm text-muted-foreground">
-                            질문
+                            정답(텍스트 일치)
                           </div>
                           <Textarea
-                            value={q.prompt}
+                            value={q.correctAnswer}
                             onChange={(e) =>
-                              updateQuestion(q.id, { prompt: e.target.value })
+                              updateQuestion(q.id, {
+                                correctAnswer: e.target.value,
+                              })
                             }
-                            placeholder="질문을 입력하세요"
-                            className="min-h-[96px] rounded-xl bg-black/20"
+                            placeholder="정답을 자유롭게 입력하세요"
+                            className="min-h-[80px] rounded-xl bg-black/20"
                           />
+
+                          <div className="text-xs text-muted-foreground">
+                            ※ 사용자가 입력한 답이 이 텍스트와 “일치”하면 정답
+                            처리됩니다.
+                          </div>
                         </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
 
-                        {q.questionType === "multiple_choice" ? (
-                          <div className="mt-4 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <div className="text-sm text-muted-foreground">
-                                선택지 (정답은 라디오)
-                              </div>
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                type="button"
-                                onClick={() => addChoice(q.id)}
-                              >
-                                + 선택지
-                              </Button>
-                            </div>
-
-                            <div className="space-y-2">
-                              {q.choices.map((c, cIdx) => {
-                                const checked =
-                                  q.correctAnswer !== "" &&
-                                  q.correctAnswer === c;
-                                return (
-                                  <div
-                                    key={`${q.id}_${cIdx}`}
-                                    className="flex items-center gap-3"
-                                  >
-                                    <label className="flex items-center gap-2 text-sm text-muted-foreground w-[90px]">
-                                      <input
-                                        type="radio"
-                                        name={`correct-${q.id}`}
-                                        checked={checked}
-                                        onChange={() =>
-                                          updateQuestion(q.id, {
-                                            correctAnswer: c,
-                                          })
-                                        }
-                                      />
-                                      정답
-                                    </label>
-
-                                    <Input
-                                      value={c}
-                                      onChange={(e) =>
-                                        updateChoice(q.id, cIdx, e.target.value)
-                                      }
-                                      className="h-10 rounded-xl bg-black/20 flex-1"
-                                      placeholder={`선택지 ${cIdx + 1}`}
-                                    />
-
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      type="button"
-                                      onClick={() => removeChoice(q.id, cIdx)}
-                                    >
-                                      삭제
-                                    </Button>
-                                  </div>
-                                );
-                              })}
-                            </div>
-
-                            <div className="text-xs text-muted-foreground">
-                              ※ 정답은 “선택지 텍스트”로 저장됩니다.
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="mt-4 space-y-2">
-                            <div className="text-sm text-muted-foreground">
-                              정답(텍스트 일치)
-                            </div>
-                            <Textarea
-                              value={q.correctAnswer}
-                              onChange={(e) =>
-                                updateQuestion(q.id, {
-                                  correctAnswer: e.target.value,
-                                })
-                              }
-                              placeholder="정답을 자유롭게 입력하세요"
-                              className="min-h-[80px] rounded-xl bg-black/20"
-                            />
-
-                            <div className="text-xs text-muted-foreground">
-                              ※ 사용자가 입력한 답이 이 텍스트와 “일치”하면 정답
-                              처리됩니다.
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {!quizQuestionsValid ? (
-                  <div className="text-sm text-red-500">
-                    퀴즈 제목이 있으면 각 문항의 질문/정답을 채워야 저장됩니다.
-                    (객관식은 라디오로 정답 선택, 주관식은 정답 텍스트 입력)
-                  </div>
-                ) : null}
-              </div>
-
-              <Button
-                className="h-12 w-full rounded-xl"
-                onClick={onSave}
-                disabled={!canSave}
-              >
-                {saving ? "저장 중..." : "세트 수정 저장"}
-              </Button>
+              {!quizQuestionsValid ? (
+                <div className="text-sm text-red-500">
+                  퀴즈 제목이 있으면 각 문항의 질문/정답을 채워야 저장됩니다.
+                  (객관식은 라디오로 정답 선택, 주관식은 정답 텍스트 입력)
+                </div>
+              ) : null}
             </div>
+
+            <Button
+              className="h-12 w-full"
+              onClick={onSave}
+              disabled={!canSave}
+            >
+              {saving ? "저장 중..." : "세트 수정 저장"}
+            </Button>
           </TabsContent>
         </Tabs>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -34,6 +34,10 @@ export default function HeaderUserBar({ user }: { user: AuthUser }) {
         </>
       )}
 
+      <Button asChild variant="secondary" size="sm" type="button">
+        <Link href="/interviews">면접</Link>
+      </Button>
+
       <span className="whitespace-nowrap">
         {displayName} ({user.username})
       </span>

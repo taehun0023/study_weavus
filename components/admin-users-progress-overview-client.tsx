@@ -12,6 +12,8 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 
+import UserCourseLessonStatus from "@/components/admin/user-detail/user-course-lesson-status";
+
 type ProgressUserRow = {
   user_id: number;
   username: string;
@@ -192,8 +194,6 @@ export default function AdminUsersProgressOverviewClient() {
       const qFrom = opts?.resetRange ? "" : from;
       const qTo = opts?.resetRange ? "" : to;
 
-      // ✅ 기간을 “사용자”가 직접 지정했을 때만 from/to를 보냄 (중요)
-      // (기본은 전체 유저 보여야 하니까 기간 파라미터를 안 보내는 쪽이 스펙과 더 잘 맞음)
       if (qFrom && qTo) {
         params.set("from", qFrom);
         params.set("to", qTo);
@@ -215,7 +215,6 @@ export default function AdminUsersProgressOverviewClient() {
         setTo("");
       }
 
-      // ✅ 기간/코스 바뀌면 선택 해제(예전 상세가 남아있는 혼동 방지)
       setSelectedUsername(null);
     } catch (e: any) {
       setError(e?.message || "에러");
@@ -260,16 +259,6 @@ export default function AdminUsersProgressOverviewClient() {
     return (
       (data?.users ?? []).find((u) => u.username === selectedUsername) ?? null
     );
-  }, [data, selectedUsername]);
-
-  const selectedDetail = useMemo(() => {
-    if (!selectedUsername) return [];
-    return (data?.detail ?? []).filter((d) => d.username === selectedUsername);
-  }, [data, selectedUsername]);
-
-  const selectedTimeline = useMemo(() => {
-    if (!selectedUsername) return [];
-    return data?.timelineByUser?.[selectedUsername] ?? [];
   }, [data, selectedUsername]);
 
   return (
@@ -406,12 +395,12 @@ export default function AdminUsersProgressOverviewClient() {
           </div>
         </div>
 
-        {/* ✅ 상세 */}
+        {/* ✅ 상세 (교체됨) */}
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
           {!selectedUser ? (
             <div className="text-sm text-muted-foreground">
-              유저를 선택하세요. “언제 진척도가 올라갔는지”는 각 퀴즈의{" "}
-              <b>최초 만점</b> 시각입니다.
+              유저를 선택하세요. 선택한 코스({course.toUpperCase()})의 모든
+              수업에 대해 문제풀이 제출/합격 여부를 표시합니다.
             </div>
           ) : (
             <div className="space-y-3">
@@ -424,7 +413,8 @@ export default function AdminUsersProgressOverviewClient() {
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    현재 필터 기간 내 최초 만점 기록 기준 상세
+                    {course.toUpperCase()} 수업 전체 ·
+                    제출/점수/합격(만점)/불합격
                   </div>
                 </div>
 
@@ -437,61 +427,10 @@ export default function AdminUsersProgressOverviewClient() {
                 </Button>
               </div>
 
-              {/* 타임라인(간단 표시) */}
-              <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                <div className="mb-2 text-xs text-muted-foreground">
-                  기간 내 누적 상승
-                </div>
-                {selectedTimeline.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">
-                    기간 내 상승 기록이 없습니다.
-                  </div>
-                ) : (
-                  <div className="grid gap-1">
-                    {selectedTimeline.slice(-10).map((t) => (
-                      <div
-                        key={t.day}
-                        className="flex items-center justify-between text-sm"
-                      >
-                        <span className="text-muted-foreground">{t.day}</span>
-                        <span className="font-medium">{t.cumulative}</span>
-                      </div>
-                    ))}
-                    {selectedTimeline.length > 10 ? (
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        최근 10개만 표시 중 (필요하면 전체 표시로 바꿔줄게)
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-
-              {/* 상세 리스트 */}
-              <div className="rounded-xl border border-white/10 bg-black/20">
-                <div className="flex items-center justify-between px-3 py-2 text-xs text-muted-foreground">
-                  <span>기간 내 최초 만점 목록</span>
-                  <span>{selectedDetail.length}건</span>
-                </div>
-                <div className="divide-y divide-white/10">
-                  {selectedDetail.length === 0 ? (
-                    <div className="px-3 py-4 text-sm text-muted-foreground">
-                      표시할 기록이 없습니다.
-                    </div>
-                  ) : (
-                    selectedDetail.map((d) => (
-                      <div
-                        key={`${d.post_id}-${d.first_at}`}
-                        className="px-3 py-3"
-                      >
-                        <div className="text-sm font-medium">{d.title}</div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {d.first_at} · postId: {d.post_id}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+              <UserCourseLessonStatus
+                userId={selectedUser.user_id}
+                course={course}
+              />
             </div>
           )}
         </div>

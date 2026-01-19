@@ -91,3 +91,189 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ===== Read-only content polish (학생용 보기) ===== */
+
+.prose {
+  line-height: 1.8;
+}
+
+/* 제목 간격 */
+.prose h1,
+.prose h2,
+.prose h3 {
+  margin-top: 1.2em;
+  margin-bottom: 0.6em;
+}
+
+/* 이미지: 넘치지 않게 */
+.prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* 링크 */
+.prose a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* 표 */
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.prose th,
+.prose td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.prose th {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* 코드(마크다운) */
+.prose pre {
+  background: #0f172a;
+  padding: 14px 16px;
+  border-radius: 12px;
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.prose code {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+.prose pre code {
+  background: transparent;
+  padding: 0;
+}
+
+/* Quill에서 저장된 코드블록도 동일하게 */
+.prose .ql-syntax {
+  background: #0f172a;
+  padding: 14px 16px;
+  border-radius: 12px;
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@layer components {
+  /* 편집(Quill) 코드블록 */
+  .editor-dark .ql-syntax {
+    background: color-mix(in oklab, var(--color-muted) 35%, black 65%);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+  }
+
+  /* 보기(prose) 코드블록 */
+  .prose :where(pre),
+  .prose :where(.ql-syntax) {
+    background: color-mix(in oklab, var(--color-muted) 35%, black 65%);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+  }
+}
+
+@layer components {
+  .codeblock-wrap .codeblock-copy {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background: color-mix(in oklab, var(--color-card) 85%, black 15%);
+    color: var(--color-foreground);
+    cursor: pointer;
+  }
+
+  .codeblock-wrap .codeblock-copy:hover {
+    background: color-mix(in oklab, var(--color-card) 75%, black 25%);
+  }
+
+  .codeblock-wrap .codeblock-lang {
+    position: absolute;
+    top: 10px;
+    right: 70px;
+    font-size: 11px;
+    padding: 5px 8px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background: color-mix(in oklab, var(--color-muted) 45%, black 55%);
+    color: var(--color-muted-foreground);
+  }
+
+  /* 버튼이 코드랑 겹치지 않게 위쪽 패딩 살짝 */
+  .codeblock-wrap pre {
+    padding-top: 2.2rem !important;
+  }
+}
+
+@layer components {
+  /* Quill list markers in read-only (Detail View) */
+
+  /* Tailwind preflight removes list-style; restore readable lists inside .prose */
+  .prose ul,
+  .prose ol {
+    margin-left: 1.25rem;
+    padding-left: 0.25rem;
+  }
+
+  /* Default HTML lists (fallback) */
+  .prose ul {
+    list-style: none; /* we will render our own marker */
+  }
+  .prose ul > li {
+    position: relative;
+    padding-left: 1.2rem;
+  }
+  .prose ul > li::before {
+    content: "・";
+    position: absolute;
+    left: 0;
+    top: 0;
+    color: var(--color-muted-foreground);
+  }
+
+  .prose ol {
+    list-style: decimal;
+  }
+
+  /* Quill bullet list (commonly: <ol><li data-list="bullet">) */
+  .prose ol > li[data-list="bullet"] {
+    position: relative;
+    padding-left: 1.2rem;
+    list-style: none;
+  }
+  .prose ol > li[data-list="bullet"]::before {
+    content: "・";
+    position: absolute;
+    left: 0;
+    top: 0;
+    color: var(--color-muted-foreground);
+  }
+
+  /* Quill ordered list (commonly: <ol><li data-list="ordered">) */
+  .prose ol > li[data-list="ordered"] {
+    list-style: decimal;
+  }
+
+  /* Quill indent (ql-indent-1/2/3...) */
+  .prose .ql-indent-1 {
+    padding-left: 1.5rem;
+  }
+  .prose .ql-indent-2 {
+    padding-left: 3rem;
+  }
+  .prose .ql-indent-3 {
+    padding-left: 4.5rem;
+  }
+}

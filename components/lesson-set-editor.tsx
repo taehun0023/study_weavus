@@ -151,10 +151,10 @@ function AttachmentBox({
   );
 }
 
-export default function LessonSetEditor({ courses }: { courses: Course[] }) {
+export default function LessonSetEditor({ courses, initialCourseId }: { courses: Course[]; initialCourseId?: number }) {
   const router = useRouter();
   const safeCourses = Array.isArray(courses) ? courses : [];
-  const [courseId, setCourseId] = useState<number>(safeCourses[0]?.id ?? 0);
+  const [courseId, setCourseId] = useState<number>(initialCourseId ?? safeCourses[0]?.id ?? 0);
 
   // lesson
   const [lessonTitle, setLessonTitle] = useState("");
@@ -403,6 +403,26 @@ export default function LessonSetEditor({ courses }: { courses: Course[] }) {
         },
       };
 
+
+      // Interview posts are stored separately (courseId = -1).
+      if (courseId === -1) {
+        const res = await fetch("/api/interviews", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: lessonTitle, content: lessonContent }),
+        });
+
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          alert(data?.message ?? `저장 실패 (${res.status})`);
+          return;
+        }
+
+        const id = Number(data?.id);
+        router.push(Number.isFinite(id) && id > 0 ? `/interviews/${id}` : "/interviews");
+        router.refresh();
+        return;
+      }
       const res = await fetch("/api/lesson-bundles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
