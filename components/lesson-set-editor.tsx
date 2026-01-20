@@ -4,8 +4,8 @@ import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectTrigger,
@@ -16,25 +16,14 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import QuillEditor from "@/components/quill-editor";
 
-type Course = { id: number; name: string; slug: string };
-type Difficulty = "easy" | "medium" | "project";
-type QuestionType = "multiple_choice" | "short_answer";
-
-type Q = {
-  key: string;
-  questionText: string;
-  questionType: QuestionType;
-  options: string[]; // 객관식 선택지
-  correctAnswer: string; // 객관식: 선택지 텍스트 / 주관식: 정답 텍스트
-};
-
-type UploadedFile = {
-  id: number;
-  name: string;
-  url: string;
-  size?: number;
-  contentType?: string;
-};
+import type {
+  Course,
+  Difficulty,
+  QuestionType,
+  QuizQuestion,
+  UploadedFile,
+} from "@/components/lesson-set/types";
+import QuestionPromptEditor from "@/components/lesson-set/question-prompt-editor";
 
 function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -176,7 +165,7 @@ export default function LessonSetEditor({
   // quiz
   const [quizTitle, setQuizTitle] = useState("");
   const [quizContent, setQuizContent] = useState("");
-  const [questions, setQuestions] = useState<Q[]>([]);
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
 
   // 탭별 업로드
   const lessonFileRef = useRef<HTMLInputElement | null>(null);
@@ -223,7 +212,7 @@ export default function LessonSetEditor({
     if (hasQuizTitle) {
       if (questions.length === 0) return false;
       for (const q of questions) {
-        if (!q.questionText.trim()) return false;
+        if (!hasMeaningfulRichText(q.questionText)) return false;
 
         if (q.questionType === "multiple_choice") {
           const opts = q.options.map((x) => x.trim()).filter(Boolean);
@@ -283,7 +272,7 @@ export default function LessonSetEditor({
     });
   }
 
-  function updateQuestion(idx: number, patch: Partial<Q>) {
+  function updateQuestion(idx: number, patch: Partial<QuizQuestion>) {
     setQuestions((prev) =>
       prev.map((q, i) => (i === idx ? { ...q, ...patch } : q)),
     );
@@ -669,13 +658,11 @@ export default function LessonSetEditor({
                   </div>
 
                   <div className="text-sm text-muted-foreground pt-2">문항</div>
-                  <Textarea
+                  <QuestionPromptEditor
                     value={q.questionText}
-                    onChange={(e) =>
-                      updateQuestion(idx, { questionText: e.target.value })
+                    onChange={(value) =>
+                      updateQuestion(idx, { questionText: value })
                     }
-                    placeholder="질문을 입력하세요"
-                    className="min-h-[96px] rounded-xl bg-black/20"
                   />
 
                   {q.questionType === "multiple_choice" ? (

@@ -9,16 +9,33 @@ type Body =
     }
   | any;
 
-// ✅ NEW: 답안 비교 정규화(여러 줄/공백 허용 + 대소문자 무시)
+// ✅ options 파싱(배열/JSON 문자열/기타 형태 방어)
+function parseOptions(raw: any): string[] {
+  if (Array.isArray(raw)) return raw.map((v) => String(v));
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.map((v) => String(v));
+    } catch {
+      // ignore
+    }
+  }
+  return [];
+}
+
+function toFiniteInt(v: any): number | null {
+  const n = typeof v === "number" ? v : Number(String(v));
+  return Number.isFinite(n) ? n : null;
+}
+
+// ✅ 답안 비교 정규화
+// - 줄바꿈 형태만 통일(Windows CRLF -> LF)
+// - 앞/뒤 공백만 제거
+// - 대소문자 구분(사용자 입력 그대로 평가)
 function normalizeForCompare(input: any) {
-  const s = String(input ?? "");
-
-  // 줄바꿈/탭/여러 공백 -> 공백 1개로 압축
-  // 예: "a \n  b"  -> "a b"
-  const collapsed = s.replace(/\s+/g, " ").trim();
-
-  // 대소문자 무시
-  return collapsed.toLowerCase();
+  return String(input ?? "")
+    .replace(/\r\n/g, "\n")
+    .trim();
 }
 
 export async function POST(
@@ -81,18 +98,33 @@ export async function POST(
     for (const q of questions) {
       let userAnswerRaw = answersObj[String(q.id)] ?? "";
 
-      // index로 오면 options로 변환
-      if (typeof userAnswerRaw === "number") {
-        const opts = Array.isArray(q.options) ? q.options : [];
-        userAnswerRaw = opts[userAnswerRaw] ?? "";
-      }
+      const opts = parseOptions(q.options);
 
-      const userAnswer = String(userAnswerRaw ?? "");
+      // ✅ 객관식: index(숫자/숫자문자열)로 오면 옵션 문자열로 변환
+      const maybeIdx = toFiniteInt(userAnswerRaw);
+      const userIndex =
+        opts.length > 0 && maybeIdx != null && maybeIdx >= 0
+          ? maybeIdx
+          : null;
+      const userAnswer =
+        userIndex != null ? String(opts[userIndex] ?? "") : String(userAnswerRaw ?? "");
 
-      // ✅ NEW: 공백/줄바꿈 허용 비교
+      // ✅ 정답이 "인덱스"로 저장돼 있든, "옵션 텍스트"로 저장돼 있든 둘 다 지원
+      const correctRaw = q.correct_answer ?? "";
+      const correctIdxFromValue = toFiniteInt(correctRaw);
+      const correctIndex =
+        opts.length > 0
+          ? correctIdxFromValue != null
+            ? correctIdxFromValue
+            : opts.findIndex((x) => normalizeForCompare(x) === normalizeForCompare(correctRaw))
+          : -1;
+
       const isCorrect =
-        normalizeForCompare(userAnswer) ===
-        normalizeForCompare(q.correct_answer ?? "");
+        // 1) 인덱스로 비교 가능하면 인덱스 비교가 최우선(가장 안정적)
+        correctIndex >= 0 && userIndex != null
+          ? userIndex === correctIndex
+          : // 2) 아니면 텍스트 비교(서술형/객관식 텍스트 저장 모두 커버)
+            normalizeForCompare(userAnswer) === normalizeForCompare(correctRaw);
 
       if (isCorrect) score++;
 

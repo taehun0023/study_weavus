@@ -144,15 +144,30 @@
   border-radius: 12px;
   overflow-x: auto;
   border: 1px solid rgba(255, 255, 255, 0.08);
+
+  /* ✅ 코드처럼 보이게 (핵심) */
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  white-space: pre;
+  tab-size: 2;
 }
+
 .prose code {
   background: rgba(255, 255, 255, 0.06);
   padding: 2px 6px;
   border-radius: 8px;
+
+  /* ✅ 인라인 코드도 모노 */
+  font-family: var(--font-mono);
 }
+
 .prose pre code {
   background: transparent;
   padding: 0;
+
+  /* ✅ pre 안의 code는 공백 유지 */
+  white-space: pre;
 }
 
 /* Quill에서 저장된 코드블록도 동일하게 */
@@ -162,6 +177,13 @@
   border-radius: 12px;
   overflow-x: auto;
   border: 1px solid rgba(255, 255, 255, 0.08);
+
+  /* ✅ 코드처럼 보이게 (핵심) */
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  white-space: pre;
+  tab-size: 2;
 }
 
 @layer components {
@@ -178,6 +200,11 @@
     background: color-mix(in oklab, var(--color-muted) 35%, black 65%);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
+
+    /* ✅ 여기에도 폰트/공백 유지 확정 */
+    font-family: var(--font-mono);
+    white-space: pre;
+    tab-size: 2;
   }
 }
 

@@ -16,21 +16,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 
 import QuillEditor from "@/components/quill-editor";
+import QuestionPromptEditor from "@/components/lesson-set/question-prompt-editor";
+import type {
+  Course,
+  Difficulty,
+  QuestionType,
+  QuizQuestion,
+  UploadedFile,
+} from "@/components/lesson-set/types";
 
-type CourseRow = { id: number; name: string; slug: string };
-type Difficulty = "easy" | "medium" | "project";
 type TabKey = "lesson" | "reference" | "quiz";
 
-type QuestionType = "multiple_choice" | "short_answer";
-
-type QuizQuestionUI = {
-  id: string;
-  prompt: string;
-  questionType: QuestionType;
-  choices: string[];
-  correctAnswer: string; // ✅ 객관식: 선택지 텍스트 / 주관식: 정답 텍스트
-  explanation?: string;
-};
+// NOTE: create/edit 화면의 문항 state를 동일하게 맞추기 위해 QuizQuestion 공용 타입 사용
 
 type ApiQuestion = {
   id?: string;
@@ -68,13 +65,7 @@ type BundleGetResp = {
   attachments?: Attachment[];
 };
 
-type UploadedFile = {
-  id: number;
-  name: string;
-  url: string;
-  size?: number;
-  contentType?: string;
-};
+
 
 const genId = () => {
   try {
@@ -107,8 +98,8 @@ function normalizeDifficulty(v: string): Difficulty {
   return "easy";
 }
 
-function apiToUiQuestion(q: ApiQuestion): QuizQuestionUI {
-  const choices =
+function apiToUiQuestion(q: ApiQuestion): QuizQuestion {
+  const options =
     q.questionType === "multiple_choice"
       ? Array.isArray(q.options)
         ? q.options
@@ -116,17 +107,17 @@ function apiToUiQuestion(q: ApiQuestion): QuizQuestionUI {
       : [];
 
   return {
-    id: q.id ?? genId(),
-    prompt: q.questionText ?? "",
+    key: q.id ?? genId(),
+    questionText: q.questionText ?? "",
     questionType: q.questionType ?? "multiple_choice",
-    choices: q.questionType === "multiple_choice" ? choices : [],
+    options: q.questionType === "multiple_choice" ? options : [],
     correctAnswer: q.correctAnswer ?? "",
     explanation: "",
   };
 }
 
-function uiToApiQuestion(q: QuizQuestionUI, orderIndex: number): ApiQuestion {
-  const trimmedPrompt = (q.prompt ?? "").trim();
+function uiToApiQuestion(q: QuizQuestion, orderIndex: number): ApiQuestion {
+  const trimmedPrompt = (q.questionText ?? "").trim();
 
   if (q.questionType === "short_answer") {
     return {
@@ -137,7 +128,7 @@ function uiToApiQuestion(q: QuizQuestionUI, orderIndex: number): ApiQuestion {
     };
   }
 
-  const opts = (q.choices ?? [])
+  const opts = (q.options ?? [])
     .map((x) => String(x ?? "").trim())
     .filter(Boolean);
   const ca = (q.correctAnswer ?? "").trim();
@@ -254,7 +245,7 @@ export default function LessonSetEditorEdit({
   courses,
   lessonId,
 }: {
-  courses: CourseRow[];
+  courses: Course[];
   lessonId: number;
 }) {
   const router = useRouter();
@@ -277,7 +268,7 @@ export default function LessonSetEditorEdit({
   const [quizTitle, setQuizTitle] = useState("");
   const [quizIntro, setQuizIntro] = useState("");
 
-  const [questions, setQuestions] = useState<QuizQuestionUI[]>([]);
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
 
   // 탭별 업로드
   const lessonFileRef = useRef<HTMLInputElement | null>(null);
@@ -383,10 +374,10 @@ export default function LessonSetEditorEdit({
     if (questions.length === 0) return false;
 
     for (const q of questions) {
-      if (!isNonEmptyText(q.prompt ?? "")) return false;
+      if (!hasMeaningfulRichText(q.questionText ?? "")) return false;
 
       if (q.questionType === "multiple_choice") {
-        const opts = (q.choices ?? [])
+        const opts = (q.options ?? [])
           .map((x) => String(x ?? "").trim())
           .filter(Boolean);
         if (opts.length < 2) return false;
@@ -491,10 +482,10 @@ export default function LessonSetEditorEdit({
     setQuestions((prev) => [
       ...prev,
       {
-        id: genId(),
-        prompt: "",
+        key: genId(),
+        questionText: "",
         questionType: "multiple_choice",
-        choices: ["", ""],
+        options: ["", ""],
         correctAnswer: "",
         explanation: "",
       },
@@ -502,28 +493,28 @@ export default function LessonSetEditorEdit({
   }
 
   function onRemoveQuestion(id: string) {
-    setQuestions((prev) => prev.filter((q) => q.id !== id));
+    setQuestions((prev) => prev.filter((q) => q.key !== id));
   }
 
-  function updateQuestion(id: string, patch: Partial<QuizQuestionUI>) {
+  function updateQuestion(id: string, patch: Partial<QuizQuestion>) {
     setQuestions((prev) =>
-      prev.map((q) => (q.id === id ? { ...q, ...patch } : q)),
+      prev.map((q) => (q.key === id ? { ...q, ...patch } : q)),
     );
   }
 
   function updateChoice(qid: string, idx: number, value: string) {
     setQuestions((prev) =>
       prev.map((q) => {
-        if (q.id !== qid) return q;
+        if (q.key !== qid) return q;
 
-        const next = [...(q.choices ?? [])];
+        const next = [...(q.options ?? [])];
         const prevText = next[idx] ?? "";
         next[idx] = value;
 
         const nextCorrect =
           q.correctAnswer === prevText ? value : q.correctAnswer;
 
-        return { ...q, choices: next, correctAnswer: nextCorrect };
+        return { ...q, options: next, correctAnswer: nextCorrect };
       }),
     );
   }
@@ -531,7 +522,7 @@ export default function LessonSetEditorEdit({
   function addChoice(qid: string) {
     setQuestions((prev) =>
       prev.map((q) =>
-        q.id === qid ? { ...q, choices: [...(q.choices ?? []), ""] } : q,
+        q.key === qid ? { ...q, options: [...(q.options ?? []), ""] } : q,
       ),
     );
   }
@@ -539,15 +530,15 @@ export default function LessonSetEditorEdit({
   function removeChoice(qid: string, idx: number) {
     setQuestions((prev) =>
       prev.map((q) => {
-        if (q.id !== qid) return q;
-        if ((q.choices ?? []).length <= 2) return q;
+        if (q.key !== qid) return q;
+        if ((q.options ?? []).length <= 2) return q;
 
-        const removing = q.choices[idx];
-        const next = q.choices.filter((_, i) => i !== idx);
+        const removing = q.options[idx];
+        const next = q.options.filter((_, i) => i !== idx);
 
         const nextCorrect = q.correctAnswer === removing ? "" : q.correctAnswer;
 
-        return { ...q, choices: next, correctAnswer: nextCorrect };
+        return { ...q, options: next, correctAnswer: nextCorrect };
       }),
     );
   }
@@ -795,7 +786,7 @@ export default function LessonSetEditorEdit({
                 <div className="space-y-4">
                   {questions.map((q, idx) => (
                     <div
-                      key={q.id}
+                      key={q.key}
                       className="rounded-lg border border-border p-4 space-y-3"
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -804,7 +795,7 @@ export default function LessonSetEditorEdit({
                           variant="destructive"
                           size="sm"
                           type="button"
-                          onClick={() => onRemoveQuestion(q.id)}
+                          onClick={() => onRemoveQuestion(q.key)}
                         >
                           삭제
                         </Button>
@@ -820,17 +811,17 @@ export default function LessonSetEditorEdit({
                             onValueChange={(v) => {
                               const t = v as QuestionType;
                               if (t === "multiple_choice") {
-                                updateQuestion(q.id, {
+                                updateQuestion(q.key, {
                                   questionType: "multiple_choice",
-                                  choices: q.choices?.length
-                                    ? q.choices
+                                  options: q.options?.length
+                                    ? q.options
                                     : ["", ""],
                                   correctAnswer: "",
                                 });
                               } else {
-                                updateQuestion(q.id, {
+                                updateQuestion(q.key, {
                                   questionType: "short_answer",
-                                  choices: [],
+                                  options: [],
                                   correctAnswer: "",
                                 });
                               }
@@ -855,13 +846,11 @@ export default function LessonSetEditorEdit({
                         <div className="text-sm text-muted-foreground">
                           질문
                         </div>
-                        <Textarea
-                          value={q.prompt}
-                          onChange={(e) =>
-                            updateQuestion(q.id, { prompt: e.target.value })
+                        <QuestionPromptEditor
+                          value={q.questionText}
+                          onChange={(value) =>
+                            updateQuestion(q.key, { questionText: value })
                           }
-                          placeholder="질문을 입력하세요"
-                          className="min-h-[96px] rounded-xl bg-black/20"
                         />
                       </div>
 
@@ -875,28 +864,28 @@ export default function LessonSetEditorEdit({
                               variant="secondary"
                               size="sm"
                               type="button"
-                              onClick={() => addChoice(q.id)}
+                              onClick={() => addChoice(q.key)}
                             >
                               + 선택지
                             </Button>
                           </div>
 
                           <div className="space-y-2">
-                            {q.choices.map((c, cIdx) => {
+                            {q.options.map((c, cIdx) => {
                               const checked =
                                 q.correctAnswer !== "" && q.correctAnswer === c;
                               return (
                                 <div
-                                  key={`${q.id}_${cIdx}`}
+                                  key={`${q.key}_${cIdx}`}
                                   className="flex items-center gap-3"
                                 >
                                   <label className="flex items-center gap-2 text-sm text-muted-foreground w-[90px]">
                                     <input
                                       type="radio"
-                                      name={`correct-${q.id}`}
+                                      name={`correct-${q.key}`}
                                       checked={checked}
                                       onChange={() =>
-                                        updateQuestion(q.id, {
+                                        updateQuestion(q.key, {
                                           correctAnswer: c,
                                         })
                                       }
@@ -907,7 +896,7 @@ export default function LessonSetEditorEdit({
                                   <Input
                                     value={c}
                                     onChange={(e) =>
-                                      updateChoice(q.id, cIdx, e.target.value)
+                                      updateChoice(q.key, cIdx, e.target.value)
                                     }
                                     className="h-10 rounded-xl bg-black/20 flex-1"
                                     placeholder={`선택지 ${cIdx + 1}`}
@@ -917,7 +906,7 @@ export default function LessonSetEditorEdit({
                                     variant="outline"
                                     size="sm"
                                     type="button"
-                                    onClick={() => removeChoice(q.id, cIdx)}
+                                    onClick={() => removeChoice(q.key, cIdx)}
                                   >
                                     삭제
                                   </Button>
@@ -938,7 +927,7 @@ export default function LessonSetEditorEdit({
                           <Textarea
                             value={q.correctAnswer}
                             onChange={(e) =>
-                              updateQuestion(q.id, {
+                              updateQuestion(q.key, {
                                 correctAnswer: e.target.value,
                               })
                             }

@@ -1,77 +1,80 @@
-"use client"
+"use client";
 
-import { useState, useMemo } from "react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { ArrowLeft, ArrowRight, Send, Loader2 } from "lucide-react"
+import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { ArrowLeft, ArrowRight, Send, Loader2 } from "lucide-react";
 
 interface Question {
-  id: number
-  questionText: string
-  questionType: "multiple_choice" | "short_answer"
-  options: string[] | null
+  id: number;
+  questionText: string;
+  questionType: "multiple_choice" | "short_answer";
+  options: string[] | null;
 }
 
 interface Quiz {
-  id: number
-  title: string
-  difficulty: string | null
-  courseName: string
-  courseSlug: string
+  id: number;
+  title: string;
+  difficulty: string | null;
+  courseName: string;
+  courseSlug: string;
 }
 
 interface QuizContainerProps {
-  quiz: Quiz
-  questions: Question[]
+  quiz: Quiz;
+  questions: Question[];
 }
 
 function shuffleArray<T>(array: T[]): T[] {
-  const shuffled = [...array]
+  const shuffled = [...array];
   for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
-  return shuffled
+  return shuffled;
 }
 
 export function QuizContainer({ quiz, questions }: QuizContainerProps) {
-  const router = useRouter()
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [answers, setAnswers] = useState<Record<number, string>>({})
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const router = useRouter();
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Randomize questions on mount
-  const randomizedQuestions = useMemo(() => shuffleArray(questions), [questions])
+  const randomizedQuestions = useMemo(
+    () => shuffleArray(questions),
+    [questions],
+  );
 
-  const currentQuestion = randomizedQuestions[currentIndex]
-  const totalQuestions = randomizedQuestions.length
-  const progress = ((currentIndex + 1) / totalQuestions) * 100
+  const currentQuestion = randomizedQuestions[currentIndex];
+  const totalQuestions = randomizedQuestions.length;
+  const progress = ((currentIndex + 1) / totalQuestions) * 100;
 
   const handleAnswerChange = (questionId: number, answer: string) => {
-    setAnswers((prev) => ({ ...prev, [questionId]: answer }))
-  }
+    setAnswers((prev) => ({ ...prev, [questionId]: answer }));
+  };
 
   const handleNext = () => {
     if (currentIndex < totalQuestions - 1) {
-      setCurrentIndex((prev) => prev + 1)
+      setCurrentIndex((prev) => prev + 1);
     }
-  }
+  };
 
   const handlePrev = () => {
     if (currentIndex > 0) {
-      setCurrentIndex((prev) => prev - 1)
+      setCurrentIndex((prev) => prev - 1);
     }
-  }
+  };
 
   const handleSubmit = async () => {
-    setIsSubmitting(true)
+    setIsSubmitting(true);
 
     try {
       const response = await fetch(`/api/quiz/${quiz.id}/submit`, {
@@ -81,24 +84,24 @@ export function QuizContainer({ quiz, questions }: QuizContainerProps) {
           answers,
           questionOrder: randomizedQuestions.map((q) => q.id),
         }),
-      })
+      });
 
-      const data = await response.json()
+      const data = await response.json();
 
       if (response.ok) {
-        router.push(`/quiz/${quiz.id}/result/${data.attemptId}`)
+        router.push(`/quiz/${quiz.id}/result/${data.attemptId}`);
       } else {
-        alert(data.error || "제출 중 오류가 발생했습니다.")
+        alert(data.error || "제출 중 오류가 발생했습니다.");
       }
     } catch {
-      alert("서버 연결에 실패했습니다.")
+      alert("서버 연결에 실패했습니다.");
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
-  const answeredCount = Object.keys(answers).length
-  const allAnswered = answeredCount === totalQuestions
+  const answeredCount = Object.keys(answers).length;
+  const allAnswered = answeredCount === totalQuestions;
 
   return (
     <div className="space-y-6">
@@ -115,7 +118,9 @@ export function QuizContainer({ quiz, questions }: QuizContainerProps) {
       <Card className="bg-card border-border">
         <CardHeader>
           <div className="flex items-center justify-between mb-2">
-            <CardTitle className="text-xl text-foreground">{quiz.title}</CardTitle>
+            <CardTitle className="text-xl text-foreground">
+              {quiz.title}
+            </CardTitle>
             <span className="text-sm text-muted-foreground">
               {currentIndex + 1} / {totalQuestions}
             </span>
@@ -124,12 +129,17 @@ export function QuizContainer({ quiz, questions }: QuizContainerProps) {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="min-h-[200px]">
-            <p className="text-lg font-medium text-foreground mb-6">{currentQuestion.questionText}</p>
+            <p className="text-lg font-medium text-foreground mb-6">
+              {currentQuestion.questionText}
+            </p>
 
-            {currentQuestion.questionType === "multiple_choice" && currentQuestion.options ? (
+            {currentQuestion.questionType === "multiple_choice" &&
+            currentQuestion.options ? (
               <RadioGroup
                 value={answers[currentQuestion.id] || ""}
-                onValueChange={(value) => handleAnswerChange(currentQuestion.id, value)}
+                onValueChange={(value) =>
+                  handleAnswerChange(currentQuestion.id, value)
+                }
               >
                 <div className="space-y-3">
                   {currentQuestion.options.map((option, index) => (
@@ -138,7 +148,10 @@ export function QuizContainer({ quiz, questions }: QuizContainerProps) {
                       className="flex items-center space-x-3 p-3 rounded-lg border border-border hover:border-primary/50 transition-colors"
                     >
                       <RadioGroupItem value={option} id={`option-${index}`} />
-                      <Label htmlFor={`option-${index}`} className="flex-1 cursor-pointer text-foreground">
+                      <Label
+                        htmlFor={`option-${index}`}
+                        className="flex-1 cursor-pointer text-foreground"
+                      >
                         {option}
                       </Label>
                     </div>
@@ -150,20 +163,29 @@ export function QuizContainer({ quiz, questions }: QuizContainerProps) {
                 type="text"
                 placeholder="답을 입력하세요"
                 value={answers[currentQuestion.id] || ""}
-                onChange={(e) => handleAnswerChange(currentQuestion.id, e.target.value)}
+                onChange={(e) =>
+                  handleAnswerChange(currentQuestion.id, e.target.value)
+                }
                 className="max-w-md"
               />
             )}
           </div>
 
           <div className="flex items-center justify-between pt-4 border-t border-border">
-            <Button variant="outline" onClick={handlePrev} disabled={currentIndex === 0}>
+            <Button
+              variant="outline"
+              onClick={handlePrev}
+              disabled={currentIndex === 0}
+            >
               <ArrowLeft className="h-4 w-4 mr-2" />
               이전
             </Button>
 
             {currentIndex === totalQuestions - 1 ? (
-              <Button onClick={handleSubmit} disabled={!allAnswered || isSubmitting}>
+              <Button
+                onClick={handleSubmit}
+                disabled={!allAnswered || isSubmitting}
+              >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -205,5 +227,5 @@ export function QuizContainer({ quiz, questions }: QuizContainerProps) {
         ))}
       </div>
     </div>
-  )
+  );
 }

@@ -60,9 +60,6 @@ export default function PostAdminActions({
           세트 수정
         </Button>
       )}
-      <Button size={size} variant="secondary" onClick={onEdit}>
-        수정
-      </Button>
       <Button size={size} variant="destructive" onClick={onDelete}>
         삭제
       </Button>

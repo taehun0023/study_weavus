@@ -1,54 +1,82 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import "react-quill-new/dist/quill.snow.css";
 
-// highlight.js core + languages
 import hljs from "highlight.js/lib/core";
-import javascript from "highlight.js/lib/languages/javascript";
-import typescript from "highlight.js/lib/languages/typescript";
-import java from "highlight.js/lib/languages/java";
-import sql from "highlight.js/lib/languages/sql";
-import xml from "highlight.js/lib/languages/xml";
-import css from "highlight.js/lib/languages/css";
-import json from "highlight.js/lib/languages/json";
+
+// ✅ languages (스샷 목록 전부)
+import plaintext from "highlight.js/lib/languages/plaintext";
 import bash from "highlight.js/lib/languages/bash";
+import cpp from "highlight.js/lib/languages/cpp";
+import csharp from "highlight.js/lib/languages/csharp";
+import css from "highlight.js/lib/languages/css";
+import diff from "highlight.js/lib/languages/diff";
+import xml from "highlight.js/lib/languages/xml";
+import java from "highlight.js/lib/languages/java";
+import javascript from "highlight.js/lib/languages/javascript";
+import markdown from "highlight.js/lib/languages/markdown";
+import php from "highlight.js/lib/languages/php";
+import python from "highlight.js/lib/languages/python";
+import ruby from "highlight.js/lib/languages/ruby";
+import sql from "highlight.js/lib/languages/sql";
+
+// (선택) TS/TSX도 유지하고 싶으면 아래도 추가로 import/register 하면 됨
+// import typescript from "highlight.js/lib/languages/typescript";
+
+import "highlight.js/styles/github-dark.css";
 
 const ReactQuill = dynamic(() => import("react-quill-new"), { ssr: false });
 
-/**
- * 저장 HTML에 언어 정보를 남기기:
- * - Quill syntax 모듈이 pre.ql-syntax에 language-xxx 클래스를 붙여주면
- * - 그걸 읽어서 data-language="xxx"로 저장되게 가공
- *
- * ⚠️ 주의: 매 onChange마다 DOMParser로 HTML을 "정규화"하면
- *          문자열이 미세하게 달라져 ReactQuill value와 충돌 → 무한 루프 가능.
- *          그래서 "주입이 정말 필요한 경우"에만 파싱한다.
- */
+const HLJS_READY_KEY = "__hljs_quill_ready__";
+
+function ensureHljsOnWindowOnce() {
+  if (typeof window === "undefined") return;
+  const w = window as any;
+
+  if (w.hljs && w[HLJS_READY_KEY]) return;
+
+  try {
+    hljs.registerLanguage("plaintext", plaintext);
+    hljs.registerLanguage("bash", bash);
+    hljs.registerLanguage("cpp", cpp);
+    hljs.registerLanguage("csharp", csharp);
+    hljs.registerLanguage("css", css);
+    hljs.registerLanguage("diff", diff);
+    hljs.registerLanguage("xml", xml);
+    hljs.registerLanguage("java", java);
+    hljs.registerLanguage("javascript", javascript);
+    hljs.registerLanguage("markdown", markdown);
+    hljs.registerLanguage("php", php);
+    hljs.registerLanguage("python", python);
+    hljs.registerLanguage("ruby", ruby);
+    hljs.registerLanguage("sql", sql);
+
+    // JSX/TSX를 JS/TS로 처리하고 싶으면 alias도 가능
+    hljs.registerLanguage("jsx", javascript);
+    // hljs.registerLanguage("typescript", typescript);
+    // hljs.registerLanguage("tsx", typescript);
+  } catch {
+    // 이미 등록된 경우 등은 무시
+  }
+
+  w.hljs = w.hljs || hljs;
+  w[HLJS_READY_KEY] = true;
+}
+
 function injectDataLanguage(html: string) {
   if (!html) return html;
-
-  // ✅ data-language가 이미 있으면 굳이 파싱할 필요 없음
   if (html.includes("data-language=")) return html;
-
-  // ✅ language-가 없으면 주입할 것도 없음
   if (!html.includes("language-")) return html;
+  if (typeof window === "undefined" || typeof DOMParser === "undefined")
+    return html;
 
-  // ✅ Quill code block / pre>code 형태가 아예 없으면 파싱할 필요 없음
   const mayHaveTargets =
     html.includes("ql-syntax") ||
     html.includes("<pre") ||
     html.includes("<code");
   if (!mayHaveTargets) return html;
-
-  // ✅ "language-"는 있는데 data-language는 없는 경우에만 실제 파싱/주입
-  //    (이 조건을 더 강하게 해서 불필요한 파싱을 최대한 줄임)
-  const shouldParse =
-    (html.includes("pre") && html.includes("language-")) ||
-    (html.includes("ql-syntax") && html.includes("language-"));
-
-  if (!shouldParse) return html;
 
   try {
     const doc = new DOMParser().parseFromString(html, "text/html");
@@ -59,63 +87,35 @@ function injectDataLanguage(html: string) {
 
       const cls = (pre.getAttribute("class") || "").split(/\s+/);
       const langClass = cls.find((c) => c.startsWith("language-"));
-      if (langClass) {
-        const lang = langClass.replace("language-", "").trim().toLowerCase();
-        if (lang) {
-          pre.setAttribute("data-language", lang);
-          mutated = true;
-        }
-      }
+      if (!langClass) return;
+
+      const lang = langClass.replace("language-", "").trim().toLowerCase();
+      if (!lang) return;
+
+      pre.setAttribute("data-language", lang);
+      mutated = true;
     });
 
-    // Markdown 스타일로 저장될 수도 있으니 pre > code도 같이 처리
     doc.querySelectorAll("pre code").forEach((code) => {
       if (code.getAttribute("data-language")) return;
 
       const cls = (code.getAttribute("class") || "").split(/\s+/);
       const langClass = cls.find((c) => c.startsWith("language-"));
-      if (langClass) {
-        const lang = langClass.replace("language-", "").trim().toLowerCase();
-        if (lang) {
-          code.setAttribute("data-language", lang);
-          mutated = true;
-        }
-      }
+      if (!langClass) return;
+
+      const lang = langClass.replace("language-", "").trim().toLowerCase();
+      if (!lang) return;
+
+      code.setAttribute("data-language", lang);
+      mutated = true;
     });
 
-    // ✅ 바뀐 게 없으면 원본 그대로 반환 (문자열 미세 변경으로 인한 루프 방지)
     if (!mutated) return html;
 
     const out = doc.body.innerHTML;
-
-    // ✅ 혹시라도 DOMParser가 공백/정렬만 바꿔버렸다면,
-    //    결과가 원본과 완전히 같을 때는 원본을 반환
-    if (out === html) return html;
-
-    return out;
+    return out === html ? html : out;
   } catch {
     return html;
-  }
-}
-
-/**
- * Quill syntax 모듈은 window.hljs를 참조함.
- * 렌더 단계에서 바로 주입해두면 초기 로딩 때도 안정적.
- */
-function ensureHljsOnWindow() {
-  if (typeof window === "undefined") return;
-
-  if (!(window as any).hljs) {
-    hljs.registerLanguage("javascript", javascript);
-    hljs.registerLanguage("typescript", typescript);
-    hljs.registerLanguage("java", java);
-    hljs.registerLanguage("sql", sql);
-    hljs.registerLanguage("xml", xml);
-    hljs.registerLanguage("css", css);
-    hljs.registerLanguage("json", json);
-    hljs.registerLanguage("bash", bash);
-
-    (window as any).hljs = hljs;
   }
 }
 
@@ -126,17 +126,43 @@ export default function QuillEditor({
   value: string;
   onChange: (v: string) => void;
 }) {
-  // ✅ 렌더 시점에 안전하게 hljs 주입
-  ensureHljsOnWindow();
+  useEffect(() => {
+    ensureHljsOnWindowOnce();
+  }, []);
+
+  const lastEmittedRef = useRef<string>("");
 
   const modules = useMemo(() => {
     return {
-      syntax: true,
+      // ✅ 여기서 languages 목록을 명시하면 스샷처럼 dropdown이 그 목록으로 맞춰짐
+      syntax: {
+        highlight: (text: string) => {
+          const w = window as any;
+          const engine = w?.hljs || hljs;
+          return engine.highlightAuto(text).value;
+        },
+        languages: [
+          { key: "plain", label: "Plain" }, // quill이 plain을 쓰는 경우가 많음
+          { key: "bash", label: "Bash" },
+          { key: "cpp", label: "C++" },
+          { key: "csharp", label: "C#" },
+          { key: "css", label: "CSS" },
+          { key: "diff", label: "Diff" },
+          { key: "xml", label: "HTML/XML" }, // HTML은 보통 xml로 처리
+          { key: "java", label: "Java" },
+          { key: "javascript", label: "JavaScript" },
+          { key: "markdown", label: "Markdown" },
+          { key: "php", label: "PHP" },
+          { key: "python", label: "Python" },
+          { key: "ruby", label: "Ruby" },
+          { key: "sql", label: "SQL" },
+        ],
+      },
       toolbar: [
         [{ header: [1, 2, 3, false] }],
         ["bold", "italic", "underline", "strike"],
         [{ list: "ordered" }, { list: "bullet" }],
-        ["blockquote", "code-block"],
+        ["blockquote", "code-block"], // ✅ code-block은 유지 (dropdown은 syntax가 관장)
         ["link", "image"],
         ["clean"],
       ],
@@ -148,8 +174,13 @@ export default function QuillEditor({
       <ReactQuill
         value={value}
         onChange={(html) => {
-          // ✅ 주입이 필요 없으면 원본 그대로 통과 (루프 방지)
+          ensureHljsOnWindowOnce();
+
           const next = injectDataLanguage(html);
+
+          if (next === lastEmittedRef.current) return;
+          lastEmittedRef.current = next;
+
           onChange(next);
         }}
         modules={modules}
@@ -158,9 +189,6 @@ export default function QuillEditor({
       />
 
       <style jsx global>{`
-        /* -----------------------------
-           Editor sizing
-        ----------------------------- */
         .quill-editor .ql-container {
           min-height: 420px;
         }
@@ -170,10 +198,6 @@ export default function QuillEditor({
           line-height: 1.7;
         }
 
-        /* -----------------------------
-           Dark theme (token-based)
-           - @theme 변수(OKLCH) 기반으로 통일
-        ----------------------------- */
         .editor-dark .ql-toolbar.ql-snow {
           background: color-mix(in oklab, var(--color-card) 92%, black 8%);
           border-color: var(--color-border);
@@ -193,7 +217,6 @@ export default function QuillEditor({
           );
         }
 
-        /* toolbar icons */
         .editor-dark .ql-snow .ql-stroke {
           stroke: color-mix(
             in oklab,
@@ -216,10 +239,6 @@ export default function QuillEditor({
           border-color: var(--color-border);
         }
 
-        /* -----------------------------
-           Code block
-           - 보기 페이지(.prose)와 동일 톤으로 맞추기 쉬운 배경
-        ----------------------------- */
         .editor-dark .ql-syntax {
           background: color-mix(in oklab, var(--color-muted) 35%, black 65%);
           color: var(--color-foreground);
