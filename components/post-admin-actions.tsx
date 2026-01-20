@@ -24,6 +24,7 @@ export default function PostAdminActions({
 }: Props) {
   const router = useRouter();
 
+  // 일반 게시글 수정(lesson이 아닌 경우)
   const onEdit = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -55,9 +56,14 @@ export default function PostAdminActions({
 
   return (
     <div className="flex gap-2">
-      {postType === "lesson" && (
+      {/* lesson은 edit-set을 '수정'으로 노출 (중복 '수정' 버튼 방지) */}
+      {postType === "lesson" ? (
         <Button size={size} variant="secondary" onClick={onSetEdit}>
-          세트 수정
+          수정
+        </Button>
+      ) : (
+        <Button size={size} variant="secondary" onClick={onEdit}>
+          수정
         </Button>
       )}
       <Button size={size} variant="destructive" onClick={onDelete}>

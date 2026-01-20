@@ -254,12 +254,7 @@ export default function AdminUsersProgressOverviewClient() {
     return sorted;
   }, [data, query, sort]);
 
-  const selectedUser = useMemo(() => {
-    if (!selectedUsername) return null;
-    return (
-      (data?.users ?? []).find((u) => u.username === selectedUsername) ?? null
-    );
-  }, [data, selectedUsername]);
+  // selectedUsername만 있으면 row에서 바로 렌더링 가능
 
   return (
     <Card className="overflow-hidden">
@@ -349,40 +344,53 @@ export default function AdminUsersProgressOverviewClient() {
               const total = data?.total ?? 0;
               const percent =
                 total > 0 ? Math.round((u.completed / total) * 100) : 0;
+              const isOpen = selectedUsername === u.username;
+
               return (
-                <div
-                  key={u.user_id}
-                  className="grid grid-cols-[1fr_120px_160px_90px] gap-2 px-4 py-4"
-                >
-                  <div>
-                    <div className="font-medium">
-                      {u.display_name ?? u.username}
+                <div key={u.user_id}>
+                  {/* Row */}
+                  <div className="grid grid-cols-[1fr_120px_160px_90px] gap-2 px-4 py-4">
+                    <div>
+                      <div className="font-medium">
+                        {u.display_name ?? u.username}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {u.username}
+                      </div>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      {u.username}
+
+                    <div className="flex items-center justify-center text-sm">
+                      {u.completed}/{total}
+                    </div>
+
+                    <div className="flex items-center justify-center text-sm tabular-nums">
+                      {percent}%/{u.last_raised_at ?? "-"}
+                    </div>
+
+                    <div className="flex items-center justify-center">
+                      <Button
+                        variant={isOpen ? "outline" : "secondary"}
+                        className="h-9 rounded-xl px-4"
+                        onClick={() =>
+                          setSelectedUsername(isOpen ? null : u.username)
+                        }
+                      >
+                        {isOpen ? "닫기" : "보기"}
+                      </Button>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-center text-sm">
-                    {u.completed}/{total}
-                  </div>
-
-                  <div className="flex flex-col items-center justify-center text-sm">
-                    <div>{percent}%</div>
-                    <div className="text-xs text-muted-foreground">
-                      {u.last_raised_at ? u.last_raised_at : "-"}
+                  {/* Inline Detail (바로 해당 유저 밑에) */}
+                  {isOpen ? (
+                    <div className="px-4 pb-5">
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <UserCourseLessonStatus
+                          userId={u.user_id}
+                          course={course}
+                        />
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="flex items-center justify-center">
-                    <Button
-                      variant="secondary"
-                      className="h-9 rounded-xl px-4"
-                      onClick={() => setSelectedUsername(u.username)}
-                    >
-                      보기
-                    </Button>
-                  </div>
+                  ) : null}
                 </div>
               );
             })}
@@ -395,45 +403,7 @@ export default function AdminUsersProgressOverviewClient() {
           </div>
         </div>
 
-        {/* ✅ 상세 (교체됨) */}
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-          {!selectedUser ? (
-            <div className="text-sm text-muted-foreground">
-              유저를 선택하세요. 선택한 코스({course.toUpperCase()})의 모든
-              수업에 대해 문제풀이 제출/합격 여부를 표시합니다.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <div className="text-sm font-semibold">
-                    {selectedUser.display_name ?? selectedUser.username}{" "}
-                    <span className="text-muted-foreground">
-                      ({selectedUser.username})
-                    </span>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {course.toUpperCase()} 수업 전체 ·
-                    제출/점수/합격(만점)/불합격
-                  </div>
-                </div>
-
-                <Button
-                  variant="outline"
-                  className="h-9 rounded-xl"
-                  onClick={() => setSelectedUsername(null)}
-                >
-                  닫기
-                </Button>
-              </div>
-
-              <UserCourseLessonStatus
-                userId={selectedUser.user_id}
-                course={course}
-              />
-            </div>
-          )}
-        </div>
+        {/* ✅ 상세는 각 유저 row 아래로 이동 (별도 섹션 제거) */}
       </CardContent>
     </Card>
   );

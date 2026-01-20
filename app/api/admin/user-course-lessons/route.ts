@@ -34,6 +34,9 @@ export async function GET(req: Request) {
     quiz_post_id: number | null;
     quiz_title: string | null;
 
+    // 최신 제출(attempt) id
+    last_attempt_id: number | null;
+
     last_attempt_at: Date | null;
     last_score: number | null;
     last_total: number | null;
@@ -53,6 +56,7 @@ export async function GET(req: Request) {
     ),
     latest_attempt AS (
       SELECT DISTINCT ON (qa.post_id)
+        qa.id AS last_attempt_id,
         qa.post_id,
         qa.created_at AS last_attempt_at,
         qa.score AS last_score,
@@ -68,6 +72,7 @@ export async function GET(req: Request) {
       le.difficulty,
       le.quiz_post_id,
       q.title AS quiz_title,
+      la.last_attempt_id,
       la.last_attempt_at,
       la.last_score,
       la.last_total,

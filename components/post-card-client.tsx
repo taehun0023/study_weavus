@@ -68,7 +68,6 @@ export default function PostCardClient({
             <PostAdminActions
               postId={postId}
               postType={postType}
-              editHref={`/posts/${postId}/edit`}
               setEditHref={`/posts/${postId}/edit-set`}
               afterDeleteHref={returnHref}
               size="sm"

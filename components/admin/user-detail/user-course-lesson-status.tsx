@@ -13,6 +13,9 @@ type Row = {
   quiz_post_id: number | null;
   quiz_title: string | null;
 
+  // ✅ 최신 attempt id (있으면 관리자 채점/결과 화면으로 바로 이동)
+  last_attempt_id: number | null;
+
   last_attempt_at: string | null;
   last_score: number | null;
   last_total: number | null;
@@ -143,11 +146,19 @@ export default function UserCourseLessonStatus({
                 </Button>
 
                 {hasQuiz ? (
-                  <Button asChild size="sm">
-                    <Link href={`/quiz/${r.quiz_post_id}?from=${r.lesson_id}`}>
+                  r.last_attempt_id ? (
+                    <Button asChild size="sm">
+                      <Link
+                        href={`/admin/quiz/${r.quiz_post_id}/result/${r.last_attempt_id}?lessonId=${r.lesson_id}`}
+                      >
+                        문제풀이
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button size="sm" disabled>
                       문제풀이
-                    </Link>
-                  </Button>
+                    </Button>
+                  )
                 ) : null}
               </div>
             </div>

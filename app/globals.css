@@ -304,3 +304,17 @@
     padding-left: 4.5rem;
   }
 }
+
+/* 클릭 가능한 요소는 손가락 커서 */
+button:not(:disabled),
+a[href],
+[role="button"]:not([aria-disabled="true"]),
+.cursor-pointer {
+  cursor: pointer;
+}
+
+/* 비활성화는 기본 커서 */
+button:disabled,
+[aria-disabled="true"] {
+  cursor: default;
+}

@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import HighlightOnView from "@/components/highlight-on-view";
+import PostAdminActions from "@/components/post-admin-actions";
 
 type Difficulty = "easy" | "medium" | "hard" | "project" | null;
 type PostType = "lesson" | "reference" | "quiz";
@@ -266,24 +267,39 @@ export default async function PostDetailPage({
 
       {/* ✅ main 간격(space-y-6) 제거: 여기서 큰 간격이 쌓였음 */}
       <main className="container mx-auto px-4 py-8">
-        {/* ✅ 상단 버튼/배지 영역은 margin만 최소로 */}
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          <Button asChild variant="ghost" className="pl-0">
-            <Link href={`/posts?course=${post.course_slug}`}>← 목록으로</Link>
-          </Button>
+        {/* ✅ 상단 영역: 좌측(목록/배지) + 우측(관리자 액션) */}
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="ghost" className="pl-0">
+              <Link href={`/posts?course=${post.course_slug}`}>← 목록으로</Link>
+            </Button>
 
-          <Badge variant="secondary">{post.course_name}</Badge>
+            <Badge variant="secondary">{post.course_name}</Badge>
 
-          {shouldShowDifficulty(post.type) && post.difficulty && (
-            <Badge
-              variant="outline"
-              className={difficultyBadgeClass(
-                post.difficulty === "hard" ? "project" : post.difficulty,
-              )}
-            >
-              {post.difficulty === "hard" ? "project" : post.difficulty}
-            </Badge>
-          )}
+            {shouldShowDifficulty(post.type) && post.difficulty && (
+              <Badge
+                variant="outline"
+                className={difficultyBadgeClass(
+                  post.difficulty === "hard" ? "project" : post.difficulty,
+                )}
+              >
+                {post.difficulty === "hard" ? "project" : post.difficulty}
+              </Badge>
+            )}
+          </div>
+
+          {/* 관리자: 수업내용 페이지 우측 상단에 수정/삭제 노출 */}
+          {user?.user_role === "ADMIN" && post.type === "lesson" ? (
+            <div className="shrink-0">
+              <PostAdminActions
+                postId={post.id}
+                postType={post.type}
+                setEditHref={`/posts/${post.id}/edit-set`}
+                afterDeleteHref={`/posts?course=${post.course_slug}`}
+                size="sm"
+              />
+            </div>
+          ) : null}
         </div>
 
         <Card>
@@ -330,12 +346,6 @@ export default async function PostDetailPage({
                 {canGoBackToLesson && (
                   <Button asChild variant="secondary">
                     <Link href={`/posts/${fromId}`}>수업내용으로</Link>
-                  </Button>
-                )}
-
-                {user?.user_role === "ADMIN" && (
-                  <Button asChild variant="secondary">
-                    <Link href={`/posts/${postId}/edit-set`}>세트 수정</Link>
                   </Button>
                 )}
 
