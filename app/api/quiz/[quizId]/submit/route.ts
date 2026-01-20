@@ -23,15 +23,20 @@ function parseOptions(raw: any): string[] {
   return [];
 }
 
+// ✅ 빈값 판정: "미작성"을 명확히 구분
+function isBlank(v: any): boolean {
+  return v == null || (typeof v === "string" && v.trim() === "");
+}
+
+// ✅ 숫자 변환: "" -> 0 되는 버그 방지
 function toFiniteInt(v: any): number | null {
+  if (v == null) return null;
+  if (typeof v === "string" && v.trim() === "") return null;
   const n = typeof v === "number" ? v : Number(String(v));
   return Number.isFinite(n) ? n : null;
 }
 
-// ✅ 답안 비교 정규화
-// - 줄바꿈 형태만 통일(Windows CRLF -> LF)
-// - 앞/뒤 공백만 제거
-// - 대소문자 구분(사용자 입력 그대로 평가)
+// ✅ 답안 비교 정규화 (기존 로직 유지)
 function normalizeForCompare(input: any) {
   return String(input ?? "")
     .replace(/\r\n/g, "\n")
@@ -40,7 +45,7 @@ function normalizeForCompare(input: any) {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ quizId: string }> }
+  { params }: { params: Promise<{ quizId: string }> },
 ) {
   try {
     const user = await getCurrentUser();
@@ -51,19 +56,18 @@ export async function POST(
     const { quizId } = await params;
     const body = (await request.json().catch(() => ({}))) as Body;
 
-    // ✅ questions: options까지 포함(방어용)
     const questions = await sql<{
       id: number;
       correct_answer: string;
       options: any;
+      question_type: string;
     }>`
-      SELECT id, correct_answer, options
+      SELECT id, correct_answer, options, question_type
       FROM quiz_questions
       WHERE post_id = ${quizId}
       ORDER BY order_index ASC, id ASC
     `;
 
-    // ✅ questionOrder가 없으면 기본값 세팅 (NOT NULL 방지)
     const fallbackOrder = questions.map((q) => q.id);
     const questionOrder =
       Array.isArray(body?.questionOrder) && body.questionOrder.length > 0
@@ -81,56 +85,73 @@ export async function POST(
               String(a.questionId ?? a.question_id ?? ""),
               a.value ?? a.userAnswer ?? "",
             ])
-            .filter(([k]: any) => k)
+            .filter(([k]: any) => k),
         )
       : typeof answersIn === "object" && answersIn
-      ? answersIn
-      : {};
+        ? answersIn
+        : {};
 
     // 채점
     let score = 0;
     const answerResults: {
       questionId: number;
-      userAnswer: string;
+      userAnswer: string | null;
+      answerState: "unanswered" | "answered";
       isCorrect: boolean;
     }[] = [];
 
     for (const q of questions) {
-      let userAnswerRaw = answersObj[String(q.id)] ?? "";
+      const userAnswerRaw = answersObj[String(q.id)];
 
+      const unanswered = isBlank(userAnswerRaw);
       const opts = parseOptions(q.options);
 
-      // ✅ 객관식: index(숫자/숫자문자열)로 오면 옵션 문자열로 변환
-      const maybeIdx = toFiniteInt(userAnswerRaw);
+      // ✅ 객관식: index로 오면 옵션 문자열로 변환 (단, 미작성은 제외)
+      const maybeIdx = unanswered ? null : toFiniteInt(userAnswerRaw);
+
       const userIndex =
-        opts.length > 0 && maybeIdx != null && maybeIdx >= 0
+        !unanswered && opts.length > 0 && maybeIdx != null && maybeIdx >= 0
           ? maybeIdx
           : null;
-      const userAnswer =
-        userIndex != null ? String(opts[userIndex] ?? "") : String(userAnswerRaw ?? "");
 
-      // ✅ 정답이 "인덱스"로 저장돼 있든, "옵션 텍스트"로 저장돼 있든 둘 다 지원
+      // index 범위 밖은 "미작성"으로 처리(잘못된 payload 방어)
+      const normalizedUserIndex =
+        userIndex != null && userIndex < opts.length ? userIndex : null;
+
+      const userAnswerText = unanswered
+        ? ""
+        : normalizedUserIndex != null
+          ? String(opts[normalizedUserIndex] ?? "")
+          : String(userAnswerRaw ?? "");
+
+      // ✅ 정답이 index/텍스트 둘 다 지원
       const correctRaw = q.correct_answer ?? "";
       const correctIdxFromValue = toFiniteInt(correctRaw);
+
       const correctIndex =
         opts.length > 0
           ? correctIdxFromValue != null
             ? correctIdxFromValue
-            : opts.findIndex((x) => normalizeForCompare(x) === normalizeForCompare(correctRaw))
+            : opts.findIndex(
+                (x) =>
+                  normalizeForCompare(x) === normalizeForCompare(correctRaw),
+              )
           : -1;
 
-      const isCorrect =
-        // 1) 인덱스로 비교 가능하면 인덱스 비교가 최우선(가장 안정적)
-        correctIndex >= 0 && userIndex != null
-          ? userIndex === correctIndex
-          : // 2) 아니면 텍스트 비교(서술형/객관식 텍스트 저장 모두 커버)
-            normalizeForCompare(userAnswer) === normalizeForCompare(correctRaw);
+      // ✅ 가장 중요: 미작성은 무조건 오답
+      const isCorrect = unanswered
+        ? false
+        : correctIndex >= 0 && normalizedUserIndex != null
+          ? normalizedUserIndex === correctIndex
+          : normalizeForCompare(userAnswerText) ===
+            normalizeForCompare(correctRaw);
 
       if (isCorrect) score++;
 
       answerResults.push({
         questionId: q.id,
-        userAnswer,
+        userAnswer: unanswered ? null : userAnswerText,
+        answerState: unanswered ? "unanswered" : "answered",
         isCorrect,
       });
     }
@@ -138,26 +159,23 @@ export async function POST(
     const totalQuestions = questions.length;
     const isPerfect = totalQuestions > 0 && score === totalQuestions;
 
-    // ✅ 반드시 JSON 문자열로 저장
     const attemptResult = await sql<{ id: number }>`
       INSERT INTO quiz_attempts (user_id, post_id, score, total_questions, is_perfect, question_order)
-      VALUES (${
-        user.id
-      }, ${quizId}, ${score}, ${totalQuestions}, ${isPerfect}, ${JSON.stringify(
-      questionOrder
-    )})
+      VALUES (${user.id}, ${quizId}, ${score}, ${totalQuestions}, ${isPerfect}, ${JSON.stringify(
+        questionOrder,
+      )})
       RETURNING id
     `;
     const attemptId = attemptResult[0].id;
 
     for (const r of answerResults) {
       await sql`
-        INSERT INTO quiz_attempt_answers (attempt_id, question_id, user_answer, is_correct)
-        VALUES (${attemptId}, ${r.questionId}, ${r.userAnswer}, ${r.isCorrect})
+        INSERT INTO quiz_attempt_answers (attempt_id, question_id, user_answer, answer_state, is_correct)
+        VALUES (${attemptId}, ${r.questionId}, ${r.userAnswer}, ${r.answerState}, ${r.isCorrect})
       `;
     }
 
-    // progress update
+    // progress update (기존 로직 유지)
     const existingProgress = await sql<{
       id: number;
       best_score: number;
@@ -195,7 +213,7 @@ export async function POST(
     console.error("Quiz submit error:", error);
     return NextResponse.json(
       { error: "퀴즈 제출 중 오류가 발생했습니다." },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

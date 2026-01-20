@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "highlight.js/styles/github-dark.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -92,229 +93,250 @@
   }
 }
 
-/* ===== Read-only content polish (학생용 보기) ===== */
+/* =========================================
+   Tistory-like content UI (본문만)
+   - NOTE: prose / prose-invert 는 JSX에서 className으로만 붙이기
+   - globals.css에서 @apply prose 금지 (turbopack에서 자주 터짐)
+   ========================================= */
 
-.prose {
-  line-height: 1.8;
+.tistory-prose {
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 760px;
+  line-height: 1.85;
+  font-size: 15.5px;
 }
 
 /* 제목 간격 */
-.prose h1,
-.prose h2,
-.prose h3 {
-  margin-top: 1.2em;
-  margin-bottom: 0.6em;
+.tistory-prose h1,
+.tistory-prose h2,
+.tistory-prose h3 {
+  margin-top: 1.4em;
+  margin-bottom: 0.65em;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+.tistory-prose h2 {
+  font-size: 1.6em;
+}
+.tistory-prose h3 {
+  font-size: 1.25em;
 }
 
-/* 이미지: 넘치지 않게 */
-.prose img {
+/* 문단 */
+.tistory-prose p {
+  margin: 0.9em 0;
+}
+
+/* 리스트 */
+.tistory-prose ul,
+.tistory-prose ol {
+  margin: 0.9em 0;
+  padding-left: 1.25em;
+}
+.tistory-prose li {
+  margin: 0.35em 0;
+}
+
+/* Notion-like minimal blockquote: | test */
+.tistory-prose blockquote {
+  margin: 0.9em 0;
+  padding: 0.05em 0 0.05em 0.9em; /* 왼쪽 들여쓰기만 */
+  border-left: 2px solid rgba(255, 255, 255, 0.28);
+  background: transparent; /* 박스/배경 제거 */
+  border-radius: 0; /* 라운드 제거 */
+  color: rgba(229, 231, 235, 0.92);
+}
+
+/* blockquote 안쪽 문단 간격 최소화(노션 느낌) */
+.tistory-prose blockquote > :first-child {
+  margin-top: 0;
+}
+.tistory-prose blockquote > :last-child {
+  margin-bottom: 0;
+}
+.tistory-prose blockquote p {
+  margin: 0.25em 0;
+}
+
+/* 링크 */
+.tistory-prose a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* 이미지 */
+.tistory-prose img {
   max-width: 100%;
   height: auto;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* 링크 */
-.prose a {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+/* -------------------------------------------------
+   코드: "텍스트처럼 보이는" 문제 해결 핵심 구역
+   - 인라인코드: mono + 칩 스타일
+   - 코드블럭: pre가 박스, pre code는 내용만
+   - code::before/after 제거
+   ------------------------------------------------- */
+
+.tistory-prose code::before,
+.tistory-prose code::after {
+  content: "";
 }
 
-/* 표 */
-.prose table {
-  width: 100%;
-  border-collapse: collapse;
-  overflow: hidden;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-.prose th,
-.prose td {
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-.prose th {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-/* 코드(마크다운) */
-.prose pre {
-  background: #0f172a;
-  padding: 14px 16px;
-  border-radius: 12px;
-  overflow-x: auto;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-
-  /* ✅ 코드처럼 보이게 (핵심) */
+/* 인라인 코드 */
+.tistory-prose :not(pre) > code {
   font-family: var(--font-mono);
-  font-size: 0.875rem;
-  line-height: 1.6;
-  white-space: pre;
-  tab-size: 2;
-}
-
-.prose code {
+  font-size: 0.92em;
+  padding: 0.2em 0.35em;
+  border-radius: 0.4em;
   background: rgba(255, 255, 255, 0.06);
-  padding: 2px 6px;
-  border-radius: 8px;
-
-  /* ✅ 인라인 코드도 모노 */
-  font-family: var(--font-mono);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.prose pre code {
-  background: transparent;
-  padding: 0;
-
-  /* ✅ pre 안의 code는 공백 유지 */
-  white-space: pre;
-}
-
-/* Quill에서 저장된 코드블록도 동일하게 */
-.prose .ql-syntax {
-  background: #0f172a;
-  padding: 14px 16px;
-  border-radius: 12px;
+/* 코드 블럭 */
+.tistory-prose pre {
+  margin: 1.1em 0;
+  padding: 1rem;
+  border-radius: 0.9rem;
   overflow-x: auto;
   border: 1px solid rgba(255, 255, 255, 0.08);
-
-  /* ✅ 코드처럼 보이게 (핵심) */
+  background: rgba(10, 18, 32, 0.75);
   font-family: var(--font-mono);
-  font-size: 0.875rem;
-  line-height: 1.6;
+  font-size: 0.92em;
+  line-height: 1.65;
+}
+
+/* pre 안쪽 code는 “글자만” */
+.tistory-prose pre code {
+  display: block;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font-family: inherit;
   white-space: pre;
-  tab-size: 2;
 }
 
-@layer components {
-  /* 편집(Quill) 코드블록 */
-  .editor-dark .ql-syntax {
-    background: color-mix(in oklab, var(--color-muted) 35%, black 65%);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-  }
-
-  /* 보기(prose) 코드블록 */
-  .prose :where(pre),
-  .prose :where(.ql-syntax) {
-    background: color-mix(in oklab, var(--color-muted) 35%, black 65%);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-
-    /* ✅ 여기에도 폰트/공백 유지 확정 */
-    font-family: var(--font-mono);
-    white-space: pre;
-    tab-size: 2;
-  }
+/* 표: 모바일 가로 스크롤 */
+.tistory-prose table {
+  display: block;
+  overflow-x: auto;
+  width: 100%;
+  margin: 1.1em 0;
+  border-collapse: collapse;
+}
+.tistory-prose th,
+.tistory-prose td {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.55em 0.7em;
+  white-space: nowrap;
 }
 
-@layer components {
-  .codeblock-wrap .codeblock-copy {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    font-size: 12px;
-    padding: 6px 10px;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--color-border);
-    background: color-mix(in oklab, var(--color-card) 85%, black 15%);
-    color: var(--color-foreground);
-    cursor: pointer;
-  }
-
-  .codeblock-wrap .codeblock-copy:hover {
-    background: color-mix(in oklab, var(--color-card) 75%, black 25%);
-  }
-
-  .codeblock-wrap .codeblock-lang {
-    position: absolute;
-    top: 10px;
-    right: 70px;
-    font-size: 11px;
-    padding: 5px 8px;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--color-border);
-    background: color-mix(in oklab, var(--color-muted) 45%, black 55%);
-    color: var(--color-muted-foreground);
-  }
-
-  /* 버튼이 코드랑 겹치지 않게 위쪽 패딩 살짝 */
-  .codeblock-wrap pre {
-    padding-top: 2.2rem !important;
-  }
+/* 구분선 */
+.tistory-prose hr {
+  margin: 1.6em 0;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-@layer components {
-  /* Quill list markers in read-only (Detail View) */
+/* =========================================
+   Codeframe (Tistory-like: language label + copy)
+   - only used where CodeBlockEnhancer wraps <pre>
+   ========================================= */
 
-  /* Tailwind preflight removes list-style; restore readable lists inside .prose */
-  .prose ul,
-  .prose ol {
-    margin-left: 1.25rem;
-    padding-left: 0.25rem;
-  }
-
-  /* Default HTML lists (fallback) */
-  .prose ul {
-    list-style: none; /* we will render our own marker */
-  }
-  .prose ul > li {
-    position: relative;
-    padding-left: 1.2rem;
-  }
-  .prose ul > li::before {
-    content: "・";
-    position: absolute;
-    left: 0;
-    top: 0;
-    color: var(--color-muted-foreground);
-  }
-
-  .prose ol {
-    list-style: decimal;
-  }
-
-  /* Quill bullet list (commonly: <ol><li data-list="bullet">) */
-  .prose ol > li[data-list="bullet"] {
-    position: relative;
-    padding-left: 1.2rem;
-    list-style: none;
-  }
-  .prose ol > li[data-list="bullet"]::before {
-    content: "・";
-    position: absolute;
-    left: 0;
-    top: 0;
-    color: var(--color-muted-foreground);
-  }
-
-  /* Quill ordered list (commonly: <ol><li data-list="ordered">) */
-  .prose ol > li[data-list="ordered"] {
-    list-style: decimal;
-  }
-
-  /* Quill indent (ql-indent-1/2/3...) */
-  .prose .ql-indent-1 {
-    padding-left: 1.5rem;
-  }
-  .prose .ql-indent-2 {
-    padding-left: 3rem;
-  }
-  .prose .ql-indent-3 {
-    padding-left: 4.5rem;
-  }
+.codeframe {
+  margin: 1.1em 0;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 18, 32, 0.75);
+  overflow: hidden;
 }
 
-/* 클릭 가능한 요소는 손가락 커서 */
-button:not(:disabled),
-a[href],
-[role="button"]:not([aria-disabled="true"]),
-.cursor-pointer {
+.codeframe__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.codeframe__lang {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: rgba(229, 231, 235, 0.9);
+}
+
+.codeframe__copy {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(229, 231, 235, 0.95);
   cursor: pointer;
+  line-height: 1;
+  white-space: nowrap;
 }
 
-/* 비활성화는 기본 커서 */
-button:disabled,
-[aria-disabled="true"] {
-  cursor: default;
+.codeframe__copy:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.codeframe pre {
+  margin: 0; /* wrapper가 margin을 갖고 있음 */
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.codeframe pre.ql-syntax {
+  padding: 0.95rem 1rem;
+}
+
+.codeframe pre code,
+.codeframe pre.ql-syntax {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  line-height: 1.65;
+}
+
+/* detail view list markers */
+.post-content ul {
+  list-style: disc;
+  padding-left: 1.25em;
+}
+.post-content ol {
+  list-style: decimal;
+  padding-left: 1.25em;
+}
+.post-content li {
+  margin: 0.35em 0;
+}
+
+/* =========================
+   Quiz code block spacing
+   (문제풀이 화면 전용)
+   ========================= */
+
+/* =========================
+   Quiz (highlight.js) code spacing
+   ONLY for quiz screen
+   ========================= */
+
+/* =========================
+   Quiz page hljs spacing (퀴즈에서만)
+   ========================= */
+pre.hljs {
+  margin: 0.75rem 0;
+  padding: 1rem 1.1rem;
+  border-radius: 0.75rem;
+  line-height: 1.6;
+  font-family: var(--font-mono);
+  overflow-x: auto;
 }

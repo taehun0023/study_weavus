@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import HighlightOnView from "@/components/highlight-on-view";
 import PostAdminActions from "@/components/post-admin-actions";
+import CodeBlockEnhancer from "@/components/codeblock-enhancer";
 
 type Difficulty = "easy" | "medium" | "hard" | "project" | null;
 type PostType = "lesson" | "reference" | "quiz";
@@ -311,7 +312,8 @@ export default async function PostDetailPage({
 
           {/* ✅ CardContent의 space-y-6 제거 → 필요한 곳만 mt로 제어 */}
           <CardContent className="pt-4">
-            <div className="prose prose-invert max-w-none">
+            {/* Tistory-like reading width/typography */}
+            <div className="tistory-prose post-content">
               {isHtml ? (
                 <div dangerouslySetInnerHTML={{ __html: safeHtml }} />
               ) : (
@@ -320,7 +322,8 @@ export default async function PostDetailPage({
             </div>
 
             <div className="mt-4">
-              <HighlightOnView selector=".prose" />
+              <HighlightOnView selector=".post-content" />
+              <CodeBlockEnhancer selector=".post-content" />
             </div>
 
             {post.type !== "lesson" ? (
@@ -342,68 +345,75 @@ export default async function PostDetailPage({
             ) : null}
 
             {post.type === "lesson" ? (
-              <div className="flex flex-wrap gap-3 mt-5">
-                {canGoBackToLesson && (
+              <div className="mt-5 flex items-center gap-3">
+                {canGoBackToLesson ? (
                   <Button asChild variant="secondary">
                     <Link href={`/posts/${fromId}`}>수업내용으로</Link>
                   </Button>
-                )}
-
-                {quizId ? (
-                  <Button asChild>
-                    <Link href={`/quiz/${quizId}?from=${postId}`}>
-                      문제풀이
-                    </Link>
-                  </Button>
-                ) : (
-                  <Button disabled>문제풀이</Button>
-                )}
+                ) : null}
               </div>
             ) : null}
 
-            {post.type === "lesson" && refPost ? (
+            {post.type === "lesson" ? (
               <div className="mt-6">
-                <div className="text-xs text-muted-foreground mb-2">
-                  참조자료
-                </div>
+                <div className="mx-auto max-w-[760px]">
+                  <div className="text-xs text-muted-foreground mb-2">
+                    참조자료
+                  </div>
 
-                <div className="rounded-lg border border-border bg-card p-4">
-                  <div className="font-semibold mb-3">{refPost.title}</div>
+                  {/* ✅ 참조자료 박스: 있으면 카드, 없으면 안내 박스 */}
+                  {refPost ? (
+                    <div className="rounded-lg border border-border bg-card p-4">
+                      <div className="font-semibold mb-3">{refPost.title}</div>
 
-                  <div className="prose prose-invert max-w-none">
-                    {(() => {
-                      const rawRef = refPost.content ?? "";
-                      const isHtmlRef = looksLikeHtml(rawRef);
-                      const safeRefHtml = isHtmlRef
-                        ? sanitizeQuillHtml(rawRef)
-                        : "";
+                      <div className="post-content tistory-prose">
+                        {(() => {
+                          const rawRef = refPost.content ?? "";
+                          const isHtmlRef = looksLikeHtml(rawRef);
+                          const safeRefHtml = isHtmlRef
+                            ? sanitizeQuillHtml(rawRef)
+                            : "";
 
-                      return isHtmlRef ? (
-                        <div
-                          dangerouslySetInnerHTML={{ __html: safeRefHtml }}
+                          return isHtmlRef ? (
+                            <div
+                              dangerouslySetInnerHTML={{ __html: safeRefHtml }}
+                            />
+                          ) : (
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {rawRef}
+                            </ReactMarkdown>
+                          );
+                        })()}
+                      </div>
+
+                      <div className="mt-6">
+                        <AttachmentsBlock
+                          title="참조자료 첨부파일"
+                          attachments={referenceAttachments}
                         />
-                      ) : (
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {rawRef}
-                        </ReactMarkdown>
-                      );
-                    })()}
-                  </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+                      참조자료가 없습니다.
+                    </div>
+                  )}
 
-                  <div className="mt-6">
-                    <AttachmentsBlock
-                      title="참조자료 첨부파일"
-                      attachments={referenceAttachments}
-                    />
+                  {/* ✅ 문제풀이 버튼: 참조자료 유무와 상관없이 quizId 있으면 표시 */}
+                  <div className="mt-3 flex justify-end">
+                    {quizId ? (
+                      <Button asChild>
+                        <Link href={`/quiz/${quizId}?from=${postId}`}>
+                          문제풀이
+                        </Link>
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        문제풀이가 없습니다.
+                      </span>
+                    )}
                   </div>
                 </div>
-              </div>
-            ) : null}
-
-            {post.type === "lesson" && (refId === null || quizId === null) ? (
-              <div className="text-xs text-muted-foreground mt-4">
-                {refId === null ? "참조자료가 없습니다. " : ""}
-                {quizId === null ? "문제풀이가 없습니다." : ""}
               </div>
             ) : null}
           </CardContent>

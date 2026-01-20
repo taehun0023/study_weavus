@@ -52,7 +52,8 @@ export default function TiptapEditor({
     editorProps: {
       attributes: {
         class:
-          "min-h-[520px] rounded-md border border-border bg-background/40 p-4 outline-none prose prose-invert max-w-none",
+          // Tistory-like: focus on the content itself (no boxed editor feel)
+          "tistory-editor min-h-[520px] outline-none",
       },
     },
     onUpdate: ({ editor }) => {
@@ -136,7 +137,7 @@ export default function TiptapEditor({
 
   return (
     <div className={className}>
-      <div className="flex flex-wrap gap-2 pb-3">
+      <div className="tistory-toolbar flex flex-wrap gap-2 pb-3">
         <Button
           type="button"
           variant={editor.isActive("bold") ? "default" : "secondary"}

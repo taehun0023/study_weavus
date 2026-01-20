@@ -10,11 +10,14 @@ export default function QuestionPromptEditor({
   onChange: (next: string) => void;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-black/10 overflow-hidden">
+    <div className="rounded-xl border border-border bg-black/10 p-3">
       <QuillEditor
         value={value}
         onChange={onChange}
-        placeholder="질문을 입력하세요 (코드블록 가능)"
+        stickyToolbar={false} // 문항 카드 안에서는 고정 X
+        maxWidthPx={9999} // 문항 카드 폭에 맞게
+        minHeightPx={180} // 기존 textarea 높이 느낌
+        placeholder="질문을 입력하세요"
       />
     </div>
   );

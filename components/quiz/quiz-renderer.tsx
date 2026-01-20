@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { RichText, stripHtml } from "@/components/rich-text";
+import { RichText } from "@/components/rich-text";
 import HighlightOnView from "@/components/highlight-on-view";
 
 type Question = {
@@ -12,6 +12,10 @@ type Question = {
   questionType: "multiple_choice" | "short_answer";
   options?: string[];
 };
+
+function isBlank(v: any) {
+  return v == null || (typeof v === "string" && v.trim() === "");
+}
 
 export default function QuizRenderer({
   quizId,
@@ -32,6 +36,14 @@ export default function QuizRenderer({
     [questions],
   );
 
+  /**
+   * ✅ 다시풀기(prefill) 로직
+   * - 빈값("")/공백은 무조건 무시 (미작성 유지)
+   * - 객관식 index는 0..options.length-1 범위만 허용
+   * - 객관식 문자열은 옵션 텍스트 매칭으로만 변환
+   *
+   * ⚠️ UI는 그대로. 로직만 안전하게.
+   */
   useEffect(() => {
     if (!quizId || questions.length === 0) return;
 
@@ -46,20 +58,46 @@ export default function QuizRenderer({
       if (!saved || typeof saved !== "object") return;
 
       const next: Record<string, any> = {};
+
       for (const q of questions) {
-        const v = saved[String(q.id)];
+        const qid = String(q.id);
+        const v = saved[qid];
+
+        // ✅ 미작성은 prefill 금지
         if (v == null) continue;
+        if (typeof v === "string" && v.trim() === "") continue;
 
         if (q.questionType === "multiple_choice") {
-          if (typeof v === "number") {
-            next[String(q.id)] = v;
-          } else {
-            const s = String(v);
-            const idx = (q.options ?? []).findIndex((opt) => opt === s);
-            if (idx >= 0) next[String(q.id)] = idx;
+          const opts = q.options ?? [];
+
+          // 1) 숫자 index로 들어온 경우: 범위 체크 필수
+          if (typeof v === "number" && Number.isFinite(v)) {
+            if (v >= 0 && v < opts.length) {
+              next[qid] = v;
+            }
+            continue;
+          }
+
+          // 2) 문자열이 숫자처럼 들어온 경우: "" 방어 + 범위 체크
+          const s = String(v);
+          if (s.trim() === "") continue;
+          const n = Number(s);
+          if (Number.isFinite(n) && n >= 0 && n < opts.length) {
+            next[qid] = n;
+            continue;
+          }
+
+          // 3) 옵션 텍스트로 들어온 경우: 동일 텍스트 찾아서 index로
+          const idx = opts.findIndex((opt) => opt === s);
+          if (idx >= 0) {
+            next[qid] = idx;
           }
         } else {
-          next[String(q.id)] = String(v);
+          // short_answer: 공백만 있는 값은 미작성으로 취급
+          const s = String(v);
+          if (s.trim().length > 0) {
+            next[qid] = s;
+          }
         }
       }
 
@@ -95,7 +133,31 @@ export default function QuizRenderer({
     setErrorMsg(null);
 
     try {
-      const payload = { answers, questionOrder };
+      /**
+       * ✅ 제출 payload 정리
+       * - 객관식: 선택한 것만 (숫자 index)
+       * - 서술형: 빈 문자열이면 굳이 보내지 않아도 되지만,
+       *   서버가 isBlank로 처리하게 "그대로" 보내도 괜찮음.
+       *
+       * 다만 "미작성 key 자체를 없애면" 서버/DB에서도 더 깔끔함.
+       */
+      const cleanedAnswers: Record<string, any> = {};
+      for (const q of questions) {
+        const key = String(q.id);
+        const v = answers[key];
+
+        if (q.questionType === "multiple_choice") {
+          if (typeof v === "number" && Number.isFinite(v) && v >= 0) {
+            cleanedAnswers[key] = v;
+          }
+        } else {
+          if (typeof v === "string" && v.trim().length > 0) {
+            cleanedAnswers[key] = v;
+          }
+        }
+      }
+
+      const payload = { answers: cleanedAnswers, questionOrder };
 
       const res = await fetch(`/api/quiz/${quizId}/submit`, {
         method: "POST",
@@ -241,16 +303,6 @@ export default function QuizRenderer({
                   }
                   placeholder="정답을 입력하세요"
                 />
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>
-                    미리보기:{" "}
-                    <span className="text-foreground">
-                      {stripHtml(String(answers[q.id] ?? "")).slice(0, 40) ||
-                        "-"}
-                    </span>
-                  </span>
-                  <span>{String(answers[q.id] ?? "").length}자</span>
-                </div>
               </div>
             )}
           </div>
