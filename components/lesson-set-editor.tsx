@@ -217,11 +217,27 @@ export default function LessonSetEditor({
         if (q.questionType === "multiple_choice") {
           const opts = q.options.map((x) => x.trim()).filter(Boolean);
           if (opts.length < 2) return false;
-          // 정답은 선택지 중 하나여야 함
-          if (!q.correctAnswer.trim()) return false;
-          if (!opts.includes(q.correctAnswer.trim())) return false;
+
+          const ca = q.correctAnswer.trim();
+          if (!ca) return false;
+
+          // ✅ 정답은 "보기 index"("0","1",...) 또는 (레거시) 보기 텍스트도 허용
+          const idx = Number.parseInt(ca, 10);
+          const isIndex =
+            Number.isFinite(idx) && String(idx) === ca && idx >= 0 && idx < opts.length;
+          const isLegacyText = opts.includes(ca);
+
+          if (!isIndex && !isLegacyText) return false;
+        } else if (q.questionType === "true_false") {
+          const ca = (q.correctAnswer ?? "").trim().toLowerCase();
+          if (!ca) return false;
+          if (!["true", "false", "1", "0"].includes(ca)) return false;
+        } else if (q.questionType === "number") {
+          const ca = (q.correctAnswer ?? "").trim();
+          if (!ca) return false;
+          if (Number.isNaN(Number(ca))) return false;
         } else {
-          // 주관식: 정답 텍스트 필수
+          // short_answer 등: 정답 텍스트 필수
           if (!q.correctAnswer.trim()) return false;
         }
       }
@@ -632,11 +648,24 @@ export default function LessonSetEditor({
                       value={q.questionType}
                       onValueChange={(v) => {
                         const t = v as QuestionType;
+                        // questionType 변경 시 입력 UI 초기화
                         if (t === "multiple_choice") {
                           updateQuestion(idx, {
                             questionType: "multiple_choice",
                             options: q.options?.length ? q.options : ["", ""],
-                            correctAnswer: "",
+                            correctAnswer: "", // index 문자열로 저장
+                          });
+                        } else if (t === "true_false") {
+                          updateQuestion(idx, {
+                            questionType: "true_false",
+                            options: [],
+                            correctAnswer: "", // 'true' | 'false'
+                          });
+                        } else if (t === "number") {
+                          updateQuestion(idx, {
+                            questionType: "number",
+                            options: [],
+                            correctAnswer: "", // 숫자 문자열
                           });
                         } else {
                           updateQuestion(idx, {
@@ -652,7 +681,9 @@ export default function LessonSetEditor({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="multiple_choice">객관식</SelectItem>
-                        <SelectItem value="short_answer">주관식</SelectItem>
+                         <SelectItem value="true_false">O/X</SelectItem>
+                         <SelectItem value="number">숫자</SelectItem>
+                         <SelectItem value="short_answer">주관식(텍스트)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -683,9 +714,7 @@ export default function LessonSetEditor({
 
                       {q.options.map((opt, j) => {
                         const optText = opt ?? "";
-                        const checked =
-                          q.correctAnswer.trim() !== "" &&
-                          q.correctAnswer === optText;
+                        const checked = q.correctAnswer.trim() !== "" && q.correctAnswer === String(j);
                         return (
                           <div key={j} className="flex items-center gap-2">
                             <label className="flex items-center gap-2 text-sm text-muted-foreground w-[90px]">
@@ -694,9 +723,7 @@ export default function LessonSetEditor({
                                 name={`correct-${q.key}`}
                                 checked={checked}
                                 onChange={() =>
-                                  updateQuestion(idx, {
-                                    correctAnswer: optText,
-                                  })
+                                  updateQuestion(idx, { correctAnswer: String(j) })
                                 }
                               />
                               정답
@@ -709,15 +736,10 @@ export default function LessonSetEditor({
                                 const prevText = next[j];
                                 next[j] = e.target.value;
 
-                                // 정답이 이 선택지였다면 정답도 함께 갱신
-                                const nextCorrect =
-                                  q.correctAnswer === prevText
-                                    ? e.target.value
-                                    : q.correctAnswer;
-
+                                // 정답은 index로 저장되므로 선택지 텍스트 변경과 무관
                                 updateQuestion(idx, {
                                   options: next,
-                                  correctAnswer: nextCorrect,
+                                  correctAnswer: q.correctAnswer,
                                 });
                               }}
                               placeholder={`선택지 ${j + 1}`}
@@ -736,7 +758,38 @@ export default function LessonSetEditor({
                       })}
 
                       <div className="text-xs text-muted-foreground">
-                        ※ 정답은 “선택지 텍스트”로 저장됩니다.
+                        ※ 정답은 “선택지 번호(index)”로 저장됩니다. (공백/줄바꿈 영향 없음)
+                      </div>
+                    </div>
+                  ) : q.questionType === "true_false" ? (
+                    <div className="space-y-2 pt-2">
+                      <div className="text-sm text-muted-foreground">정답(O/X)</div>
+                      <div className="flex gap-3">
+                        {[{k:"true", label:"O"},{k:"false", label:"X"}].map((it)=> (
+                          <label key={it.k} className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/10 px-4 py-2 text-sm cursor-pointer">
+                            <input
+                              type="radio"
+                              name={`tf-${q.key}`}
+                              checked={q.correctAnswer === it.k}
+                              onChange={() => updateQuestion(idx, { correctAnswer: it.k })}
+                            />
+                            <span>{it.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ) : q.questionType === "number" ? (
+                    <div className="space-y-2 pt-2">
+                      <div className="text-sm text-muted-foreground">정답(숫자)</div>
+                      <Input
+                        type="number"
+                        value={q.correctAnswer}
+                        onChange={(e) => updateQuestion(idx, { correctAnswer: e.target.value })}
+                        placeholder="예: 42"
+                        className="rounded-xl bg-black/20"
+                      />
+                      <div className="text-xs text-muted-foreground">
+                        ※ 채점 시 숫자로 변환해 비교합니다. (1 과 1.0 동일)
                       </div>
                     </div>
                   ) : (
@@ -759,6 +812,23 @@ export default function LessonSetEditor({
                       </div>
                     </div>
                   )}
+
+                  <div className="space-y-2 pt-4">
+                    <div className="text-sm text-muted-foreground">문제풀이(해설)</div>
+                    <div className="rounded-xl border border-border bg-black/10 p-3">
+                      <QuillEditor
+                        value={q.explanation ?? ""}
+                        onChange={(v) => updateQuestion(idx, { explanation: v })}
+                        stickyToolbar={false}
+                        maxWidthPx={9999}
+                        minHeightPx={160}
+                        placeholder="문제풀이/해설을 입력하세요"
+                      />
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      ※ 오답일 때 정답과 함께 표시됩니다.
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>

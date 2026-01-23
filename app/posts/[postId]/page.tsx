@@ -313,7 +313,7 @@ export default async function PostDetailPage({
           {/* ✅ CardContent의 space-y-6 제거 → 필요한 곳만 mt로 제어 */}
           <CardContent className="pt-4">
             {/* Tistory-like reading width/typography */}
-            <div className="tistory-prose post-content">
+            <div className="tistory-prose post-content study-richtext">
               {isHtml ? (
                 <div dangerouslySetInnerHTML={{ __html: safeHtml }} />
               ) : (
@@ -366,7 +366,7 @@ export default async function PostDetailPage({
                     <div className="rounded-lg border border-border bg-card p-4">
                       <div className="font-semibold mb-3">{refPost.title}</div>
 
-                      <div className="post-content tistory-prose">
+                      <div className="post-content tistory-prose study-richtext">
                         {(() => {
                           const rawRef = refPost.content ?? "";
                           const isHtmlRef = looksLikeHtml(rawRef);

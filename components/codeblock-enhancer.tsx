@@ -187,12 +187,15 @@ function enhanceCodeBlocks(root: HTMLElement) {
   const pres = Array.from(root.querySelectorAll("pre")) as HTMLElement[];
 
   for (const pre of pres) {
-    // ✅ 1) 항상 하이라이트 시도 (span이 있으면 내부에서 자동 스킵)
+    // ✅ 1. 항상 하이라이트 시도
     applyHighlightToPre(pre);
 
-    // ✅ 2) 복사/라벨 프레임은 항상 적용
-    if (pre.closest(".codeframe")) continue;
+    // ✅ 2. 이미 codeframe 안에 있으면 재구성만 스킵
+    if (pre.parentElement?.classList.contains("codeframe")) {
+      continue;
+    }
 
+    // ✅ 3. 강제로 codeframe 생성
     const frame = document.createElement("div");
     frame.className = "codeframe";
 
@@ -210,9 +213,8 @@ function enhanceCodeBlocks(root: HTMLElement) {
     btn.textContent = "복사";
 
     btn.addEventListener("click", async () => {
-      const code = pre.innerText ?? "";
       try {
-        await navigator.clipboard.writeText(code);
+        await navigator.clipboard.writeText(pre.innerText ?? "");
         btn.textContent = "복사됨";
         setTimeout(() => (btn.textContent = "복사"), 900);
       } catch {
@@ -241,14 +243,41 @@ export default function CodeBlockEnhancer({
   useEffect(() => {
     ensureHljsOnce();
 
-    const root = document.querySelector(selector) as HTMLElement | null;
-    if (!root) return;
+    const roots = Array.from(
+      document.querySelectorAll(selector),
+    ) as HTMLElement[];
+    if (roots.length === 0) return;
 
-    // 1) lists first
-    normalizeQuillLists(root);
+    const observers: MutationObserver[] = [];
+    const timers: number[] = [];
+    let raf = 0;
 
-    // 2) code blocks + highlight + copy frame
-    enhanceCodeBlocks(root);
+    const run = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        for (const root of roots) {
+          normalizeQuillLists(root);
+          enhanceCodeBlocks(root);
+        }
+      });
+    };
+
+    // 최초 + 늦게 들어오는 DOM 대비
+    run();
+    timers.push(window.setTimeout(run, 50));
+
+    // 각 root마다 감시
+    for (const root of roots) {
+      const ob = new MutationObserver(() => run());
+      ob.observe(root, { childList: true, subtree: true });
+      observers.push(ob);
+    }
+
+    return () => {
+      for (const t of timers) window.clearTimeout(t);
+      for (const ob of observers) ob.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, [selector]);
 
   return null;

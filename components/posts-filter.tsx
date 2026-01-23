@@ -62,7 +62,7 @@ export function PostsFilter({
         <div className="inline-flex rounded-md border border-border overflow-hidden">
           <Button
             variant={isAll ? "secondary" : "ghost"}
-            className="rounded-none"
+            className="rounded-none cursor-pointer"
             onClick={() => setDifficulty("all")}
           >
             전체
@@ -70,7 +70,7 @@ export function PostsFilter({
 
           <Button
             variant="ghost"
-            className={`rounded-none border-l border-border ${
+            className={`rounded-none cursor-pointer border-l border-border ${
               selectedDifficulty === "easy"
                 ? `border ${difficultyButtonClass("easy")}`
                 : ""
@@ -82,7 +82,7 @@ export function PostsFilter({
 
           <Button
             variant="ghost"
-            className={`rounded-none border-l border-border ${
+            className={`rounded-none cursor-pointer border-l border-border ${
               selectedDifficulty === "medium"
                 ? `border ${difficultyButtonClass("medium")}`
                 : ""
@@ -94,7 +94,7 @@ export function PostsFilter({
 
           <Button
             variant="ghost"
-            className={`rounded-none border-l border-border ${
+            className={`rounded-none cursor-pointer border-l border-border ${
               selectedDifficulty === "project"
                 ? `border ${difficultyButtonClass("project")}`
                 : ""

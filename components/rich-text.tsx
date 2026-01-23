@@ -79,7 +79,7 @@ function sanitizeNode(node: Node) {
       }
 
       // style/src/href 등은 여기서 전부 제거 (필요하면 whitelist로 확장)
-      if (!ALLOWED_ATTRS.has(name)) {
+      if (!ALLOWED_ATTRS.has(name) && !name.startsWith("data-")) {
         el.removeAttribute(attr.name);
         continue;
       }
@@ -131,7 +131,7 @@ function sanitizeHtmlSSR(html: string) {
       const name = match[1].toLowerCase();
       const value = match[2];
       if (name.startsWith("on")) continue;
-      if (!ALLOWED_ATTRS.has(name)) continue;
+      if (!ALLOWED_ATTRS.has(name) && !name.startsWith("data-")) continue;
       kept.push(`${match[1]}=${value}`);
     }
     return kept.length ? `<${tag} ${kept.join(" ")}>` : `<${tag}>`;
@@ -209,7 +209,10 @@ export function RichText({ html, className }: RichTextProps) {
     setMounted(true);
   }, []);
 
-  const safe = React.useMemo(() => (mounted ? sanitizeHtml(html) : ""), [html, mounted]);
+  const safe = React.useMemo(
+    () => (mounted ? sanitizeHtml(html) : ""),
+    [html, mounted],
+  );
 
   if (!mounted) {
     return (
@@ -219,5 +222,7 @@ export function RichText({ html, className }: RichTextProps) {
     );
   }
 
-  return <div className={className} dangerouslySetInnerHTML={{ __html: safe }} />;
+  return (
+    <div className={className} dangerouslySetInnerHTML={{ __html: safe }} />
+  );
 }

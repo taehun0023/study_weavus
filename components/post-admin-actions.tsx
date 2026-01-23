@@ -58,15 +58,15 @@ export default function PostAdminActions({
     <div className="flex gap-2">
       {/* lesson은 edit-set을 '수정'으로 노출 (중복 '수정' 버튼 방지) */}
       {postType === "lesson" ? (
-        <Button size={size} variant="secondary" onClick={onSetEdit}>
+        <Button className="cursor-pointer" size={size} variant="secondary" onClick={onSetEdit}>
           수정
         </Button>
       ) : (
-        <Button size={size} variant="secondary" onClick={onEdit}>
+        <Button className="cursor-pointer" size={size} variant="secondary" onClick={onEdit}>
           수정
         </Button>
       )}
-      <Button size={size} variant="destructive" onClick={onDelete}>
+      <Button className="cursor-pointer" size={size} variant="destructive" onClick={onDelete}>
         삭제
       </Button>
     </div>

@@ -4,7 +4,9 @@ export type Course = { id: number; name: string; slug: string };
 
 export type Difficulty = "easy" | "medium" | "project";
 
-export type QuestionType = "multiple_choice" | "short_answer";
+export type QuestionType = "multiple_choice" | "true_false" | "number" | "short_answer";
+
+export type AnswerType = "choice" | "boolean" | "number" | "string";
 
 // 공통 퀴즈 문항(UI state)
 export type QuizQuestion = {
@@ -14,6 +16,7 @@ export type QuizQuestion = {
   questionType: QuestionType;
   options: string[];
   correctAnswer: string;
+  answerType?: AnswerType;
   explanation?: string;
 };
 

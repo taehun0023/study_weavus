@@ -12,6 +12,7 @@ type QuestionPayload = {
   questionType: QuestionType;
   options?: string[];
   correctAnswer: string;
+  explanation?: string;
   orderIndex: number;
 };
 
@@ -219,7 +220,7 @@ export async function GET(
       ? (
           await client.query(
             `
-            SELECT id, question_text, question_type, options, correct_answer, order_index
+            SELECT id, question_text, question_type, options, correct_answer, explanation, order_index
             FROM public.quiz_questions
             WHERE post_id = $1
             ORDER BY order_index ASC
@@ -230,12 +231,18 @@ export async function GET(
           id: r.id,
           questionText: r.question_text,
           questionType: r.question_type,
-          options: Array.isArray(r.options)
-            ? r.options
-            : r.options
-              ? r.options
-              : [],
+          options: (() => {
+            if (Array.isArray(r.options)) return r.options;
+            if (typeof r.options === "string") {
+              try {
+                const parsed = JSON.parse(r.options);
+                if (Array.isArray(parsed)) return parsed;
+              } catch {}
+            }
+            return r.options ? r.options : [];
+          })(),
           correctAnswer: r.correct_answer,
+          explanation: r.explanation ?? "",
           orderIndex: r.order_index,
         }))
       : [];
@@ -382,8 +389,15 @@ export async function PUT(
         { message: "Question text required" },
         { status: 400 },
       );
+    // questionType: UI에서 사용하는 값들을 모두 허용
+    // - multiple_choice: 객관식(보기)
+    // - true_false: O/X
+    // - number: 숫자 정답
+    // - short_answer: 단답(텍스트)
     if (
       q.questionType !== "multiple_choice" &&
+      q.questionType !== "true_false" &&
+      q.questionType !== "number" &&
       q.questionType !== "short_answer"
     )
       return NextResponse.json(
@@ -589,9 +603,9 @@ export async function PUT(
         await client.query(
           `
           INSERT INTO public.quiz_questions
-            (post_id, question_text, question_type, options, correct_answer, order_index)
+            (post_id, question_text, question_type, options, correct_answer, explanation, order_index)
           VALUES
-            ($1, $2, $3, $4::jsonb, $5, $6)
+            ($1, $2, $3, $4::jsonb, $5, $6, $7)
           `,
           [
             quizId,
@@ -599,6 +613,7 @@ export async function PUT(
             q.questionType,
             optionsJson,
             q.correctAnswer,
+            (q as any).explanation ?? null,
             q.orderIndex,
           ],
         );

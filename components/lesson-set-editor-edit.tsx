@@ -112,8 +112,8 @@ function apiToUiQuestion(q: ApiQuestion): QuizQuestion {
     questionType: q.questionType ?? "multiple_choice",
     options: q.questionType === "multiple_choice" ? options : [],
     correctAnswer: q.correctAnswer ?? "",
-    explanation: "",
-  };
+    explanation: q.explanation ?? "",
+    };
 }
 
 function uiToApiQuestion(q: QuizQuestion, orderIndex: number): ApiQuestion {
@@ -124,6 +124,7 @@ function uiToApiQuestion(q: QuizQuestion, orderIndex: number): ApiQuestion {
       questionText: trimmedPrompt,
       questionType: "short_answer",
       correctAnswer: (q.correctAnswer ?? "").trim(),
+      explanation: (q.explanation ?? "").trim(),
       orderIndex,
     };
   }
@@ -138,6 +139,7 @@ function uiToApiQuestion(q: QuizQuestion, orderIndex: number): ApiQuestion {
     questionType: "multiple_choice",
     options: opts,
     correctAnswer: ca,
+    explanation: (q.explanation ?? "").trim(),
     orderIndex,
   };
 }
@@ -381,9 +383,25 @@ export default function LessonSetEditorEdit({
           .map((x) => String(x ?? "").trim())
           .filter(Boolean);
         if (opts.length < 2) return false;
+
         const ca = (q.correctAnswer ?? "").trim();
         if (!ca) return false;
-        if (!opts.includes(ca)) return false;
+
+        // ✅ 정답은 "보기 index"("0","1",...) 또는 (레거시) 보기 텍스트도 허용
+        const idx = Number.parseInt(ca, 10);
+        const isIndex =
+          Number.isFinite(idx) && String(idx) === ca && idx >= 0 && idx < opts.length;
+        const isLegacyText = opts.includes(ca);
+
+        if (!isIndex && !isLegacyText) return false;
+      } else if (q.questionType === "true_false") {
+        const ca = String(q.correctAnswer ?? "").trim().toLowerCase();
+        if (!ca) return false;
+        if (!["true", "false", "1", "0"].includes(ca)) return false;
+      } else if (q.questionType === "number") {
+        const ca = String(q.correctAnswer ?? "").trim();
+        if (!ca) return false;
+        if (Number.isNaN(Number(ca))) return false;
       } else {
         if (!isNonEmptyText(q.correctAnswer ?? "")) return false;
       }
@@ -487,8 +505,8 @@ export default function LessonSetEditorEdit({
         questionType: "multiple_choice",
         options: ["", ""],
         correctAnswer: "",
-        explanation: "",
-      },
+        explanation: q.explanation ?? "",
+    },
     ]);
   }
 
@@ -809,22 +827,33 @@ export default function LessonSetEditorEdit({
                           <Select
                             value={q.questionType}
                             onValueChange={(v) => {
-                              const t = v as QuestionType;
-                              if (t === "multiple_choice") {
-                                updateQuestion(q.key, {
-                                  questionType: "multiple_choice",
-                                  options: q.options?.length
-                                    ? q.options
-                                    : ["", ""],
-                                  correctAnswer: "",
-                                });
-                              } else {
-                                updateQuestion(q.key, {
-                                  questionType: "short_answer",
-                                  options: [],
-                                  correctAnswer: "",
-                                });
-                              }
+                        const t = v as QuestionType;
+                        // questionType 변경 시 입력 UI 초기화
+                        if (t === "multiple_choice") {
+                          updateQuestion(q.key, {
+                            questionType: "multiple_choice",
+                            options: q.options?.length ? q.options : ["", ""],
+                            correctAnswer: "", // index 문자열로 저장
+                          });
+                        } else if (t === "true_false") {
+                          updateQuestion(q.key, {
+                            questionType: "true_false",
+                            options: [],
+                            correctAnswer: "", // 'true' | 'false'
+                          });
+                        } else if (t === "number") {
+                          updateQuestion(q.key, {
+                            questionType: "number",
+                            options: [],
+                            correctAnswer: "", // 숫자 문자열
+                          });
+                        } else {
+                          updateQuestion(q.key, {
+                            questionType: "short_answer",
+                            options: [],
+                            correctAnswer: "",
+                          });
+                        }
                             }}
                           >
                             <SelectTrigger>
@@ -836,6 +865,9 @@ export default function LessonSetEditorEdit({
                               </SelectItem>
                               <SelectItem value="short_answer">
                                 주관식
+                              </SelectItem>
+                              <SelectItem value="true_false">
+                                O/X
                               </SelectItem>
                             </SelectContent>
                           </Select>
@@ -916,7 +948,7 @@ export default function LessonSetEditorEdit({
                           </div>
 
                           <div className="text-xs text-muted-foreground">
-                            ※ 정답은 “선택지 텍스트”로 저장됩니다.
+                            ※ 정답은 “선택지 번호(index)”로 저장됩니다. (공백/줄바꿈 영향 없음)
                           </div>
                         </div>
                       ) : (
@@ -941,6 +973,23 @@ export default function LessonSetEditorEdit({
                           </div>
                         </div>
                       )}
+
+                      <div className="space-y-2 pt-4">
+                        <div className="text-sm text-muted-foreground">문제풀이(해설)</div>
+                        <div className="rounded-xl border border-border bg-black/10 p-3">
+                          <QuillEditor
+                            value={q.explanation ?? ""}
+                            onChange={(v) => updateQuestion(q.key, { explanation: v })}
+                            stickyToolbar={false}
+                            maxWidthPx={9999}
+                            minHeightPx={160}
+                            placeholder="문제풀이/해설을 입력하세요"
+                          />
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          ※ 오답일 때 정답과 함께 표시됩니다.
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>

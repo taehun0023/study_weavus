@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle, XCircle, ArrowLeft, Trophy } from "lucide-react";
 import { AttemptHistory } from "@/components/attempt-history";
 import HighlightOnView from "@/components/highlight-on-view";
+import CodeBlockEnhancer from "@/components/codeblock-enhancer";
 import CopyInlineButton from "@/components/quiz/copy-inline-button";
 import RetryWithPrefillButton from "@/components/quiz/retry-with-prefill-button";
 
@@ -60,6 +61,46 @@ function parseOptions(raw: any): string[] {
     }
   }
   return [];
+}
+
+function normalizeForCompare(input: any) {
+  return String(input ?? "")
+    .replace(/\r\n/g, "\n")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+}
+
+function displayAnswer(
+  questionType: string,
+  raw: any,
+  optionsRaw: any,
+): string {
+  const rawStr = raw == null ? "" : String(raw);
+  if (rawStr.trim() === "") return "";
+
+  if (questionType === "multiple_choice") {
+    const opts = parseOptions(optionsRaw);
+
+    // index(숫자/숫자문자열) -> 옵션 텍스트
+    const n = Number(rawStr);
+    if (opts.length > 0 && Number.isFinite(n) && n >= 0 && n < opts.length) {
+      return String(opts[n]);
+    }
+
+    // 이미 텍스트로 저장된 경우(레거시)
+    return rawStr;
+  }
+
+  if (questionType === "true_false") {
+    const v = normalizeForCompare(rawStr);
+    if (v === "TRUE" || v === "O" || v === "1") return "O";
+    if (v === "FALSE" || v === "X" || v === "0") return "X";
+    return rawStr;
+  }
+
+  // number / short_answer 등
+  return rawStr;
 }
 
 function isBlank(v: any): boolean {
@@ -260,8 +301,8 @@ export default async function ResultPage({ params }: ResultPageProps) {
             const bodySelector = `result-prose-${answer.question_id}`;
 
             const state = String(answer.answer_state ?? "").toLowerCase();
-            const myAnswerText = String(answer.user_answer ?? "");
-            const correctText = String(answer.correct_answer ?? "");
+            const myAnswerText = displayAnswer(answer.question_type, answer.user_answer, answer.options);
+            const correctText = displayAnswer(answer.question_type, answer.correct_answer, answer.options);
 
             const isUnanswered =
               state === "unanswered" || isBlank(myAnswerText);
@@ -305,6 +346,7 @@ export default async function ResultPage({ params }: ResultPageProps) {
                   {hasBody ? (
                     <>
                       <HighlightOnView selector={`.${bodySelector}`} />
+                      <CodeBlockEnhancer selector={`.${bodySelector}`} />
                       <div
                         className={`${bodySelector} prose prose-invert max-w-none`}
                         dangerouslySetInnerHTML={{ __html: q.bodyHtml }}
@@ -351,12 +393,13 @@ export default async function ResultPage({ params }: ResultPageProps) {
                     ) : null}
                   </div>
 
-                  {answer.explanation && (
+                  {!answer.is_correct && !!answer.explanation && (
                     <div className="p-3 rounded-lg bg-card border border-border">
                       <p className="text-sm text-muted-foreground mb-1">해설</p>
                       {looksLikeHtml(answer.explanation) ? (
                         <>
                           <HighlightOnView selector={`.${bodySelector}-exp`} />
+                          <CodeBlockEnhancer selector={`.${bodySelector}-exp`} />
                           <div
                             className={`${bodySelector}-exp prose prose-invert max-w-none`}
                             dangerouslySetInnerHTML={{

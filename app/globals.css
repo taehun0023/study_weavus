@@ -247,6 +247,8 @@
    ========================================= */
 
 .codeframe {
+  width: 100%;
+  max-width: 100%;
   margin: 1.1em 0;
   border-radius: 0.9rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -295,8 +297,11 @@
   background: transparent;
 }
 
+.codeframe pre {
+  padding: 0.95rem 1rem; /* ✅ markdown pre도 포함 */
+}
 .codeframe pre.ql-syntax {
-  padding: 0.95rem 1rem;
+  padding: 0.95rem 1rem; /* 유지해도 되고 생략해도 됨 */
 }
 
 .codeframe pre code,
@@ -339,4 +344,128 @@ pre.hljs {
   line-height: 1.6;
   font-family: var(--font-mono);
   overflow-x: auto;
+}
+
+/* quiz rich-text list markers */
+.study-prose ul {
+  list-style-type: disc;
+  margin: 0.9em 0;
+  padding-left: 1.25em;
+}
+
+.study-prose ol {
+  list-style-type: decimal;
+  margin: 0.9em 0;
+  padding-left: 1.25em;
+}
+
+.study-prose li {
+  margin: 0.35em 0;
+}
+
+/* RichText: preserve author styles, only add essentials */
+.study-richtext ul {
+  list-style-type: disc;
+  padding-left: 1.25em;
+  margin: 0.9em 0;
+}
+.study-richtext ol {
+  list-style-type: decimal;
+  padding-left: 1.25em;
+  margin: 0.9em 0;
+}
+.study-richtext li {
+  margin: 0.35em 0;
+}
+.study-richtext img {
+  max-width: 100%;
+  height: auto;
+}
+/* ===== Quill-render styles for viewing (quiz/result) ===== */
+.study-richtext.ql-editor {
+  /* Quill 기본 텍스트 흐름 */
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+/* 정렬 */
+.study-richtext .ql-align-center {
+  text-align: center;
+}
+.study-richtext .ql-align-right {
+  text-align: right;
+}
+.study-richtext .ql-align-justify {
+  text-align: justify;
+}
+
+/* 글자 크기 (Quill 클래스) */
+.study-richtext .ql-size-small {
+  font-size: 0.875em;
+}
+.study-richtext .ql-size-large {
+  font-size: 1.25em;
+}
+.study-richtext .ql-size-huge {
+  font-size: 1.6em;
+}
+
+/* 리스트(점/번호) */
+.study-richtext ul {
+  list-style: disc;
+  margin: 0.8em 0;
+  padding-left: 1.4em;
+}
+.study-richtext ol {
+  list-style: decimal;
+  margin: 0.8em 0;
+  padding-left: 1.4em;
+}
+.study-richtext li {
+  margin: 0.25em 0;
+}
+
+/* 코드 블록 (Quill: pre.ql-syntax) */
+.study-richtext pre.ql-syntax {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 0.95em;
+  line-height: 1.5;
+  padding: 12px 14px;
+  border-radius: 12px;
+  overflow-x: auto;
+  white-space: pre;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 인라인 코드 */
+.study-richtext code {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 0.95em;
+  padding: 0.1em 0.35em;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* 이미지 유지 */
+.study-richtext img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0.6em 0;
+}
+
+/* 문단 간격(Quill 기본 느낌) */
+.study-richtext p {
+  margin: 0.6em 0;
+}
+.study-richtext h1,
+.study-richtext h2,
+.study-richtext h3 {
+  margin: 0.8em 0 0.4em;
 }

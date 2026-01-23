@@ -5,11 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { RichText } from "@/components/rich-text";
 import HighlightOnView from "@/components/highlight-on-view";
+import CodeBlockEnhancer from "@/components/codeblock-enhancer";
 
 type Question = {
   id: string;
   questionText: string;
-  questionType: "multiple_choice" | "short_answer";
+  questionType: "multiple_choice" | "short_answer" | "true_false";
   options?: string[];
 };
 
@@ -199,7 +200,8 @@ export default function QuizRenderer({
   return (
     <div className="space-y-4">
       {/* ✅ 수업내용 페이지처럼 코드 하이라이트/복사버튼/언어배지를 “문제풀이 페이지”에서도 돌리기 */}
-      <HighlightOnView selector=".prose" />
+      <HighlightOnView selector=".study-richtext" />
+      <CodeBlockEnhancer selector=".study-richtext.ql-editor" />
 
       {errorMsg ? (
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
@@ -219,6 +221,17 @@ export default function QuizRenderer({
       </div>
 
       {questions.map((q, idx) => {
+        {
+          /* 문제 지문 */
+        }
+        {
+          q.questionText && (
+            <div className="mb-4">
+              <RichText className="study-richtext" html={q.questionText} />
+            </div>
+          );
+        }
+
         const selectedIndex =
           typeof answers[q.id] === "number" ? (answers[q.id] as number) : -1;
 
@@ -251,7 +264,7 @@ export default function QuizRenderer({
                 </div>
 
                 <RichText
-                  className="prose prose-invert max-w-none text-sm leading-relaxed"
+                  className="study-richtext ql-editor"
                   html={q.questionText}
                 />
               </div>
@@ -282,16 +295,48 @@ export default function QuizRenderer({
                     />
                     <div className="min-w-0">
                       {opt.includes("<") ? (
-                        <RichText
-                          className="prose prose-invert max-w-none text-sm leading-relaxed"
-                          html={opt}
-                        />
+                        <RichText className="study-richtext" html={opt} />
                       ) : (
                         <div className="leading-relaxed">{opt}</div>
                       )}
                     </div>
                   </label>
                 ))}
+              </div>
+            ) : q.questionType === "true_false" ? (
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-3">
+                  {(
+                    [
+                      { label: "O", value: "true" },
+                      { label: "X", value: "false" },
+                    ] as const
+                  ).map((item) => {
+                    const selected = String(answers[q.id] ?? "") === item.value;
+                    return (
+                      <label
+                        key={item.value}
+                        className={`group flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-3 text-sm transition ${
+                          selected
+                            ? "border-primary/40 bg-primary/10"
+                            : "border-white/10 bg-black/10 hover:border-primary/25"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name={`q-${q.id}`}
+                          value={item.value}
+                          checked={selected}
+                          onChange={() =>
+                            setAnswers((p) => ({ ...p, [q.id]: item.value }))
+                          }
+                          className="mt-0.5"
+                        />
+                        <span className="font-medium">{item.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
             ) : (
               <div className="space-y-2">

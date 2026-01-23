@@ -220,7 +220,7 @@ export default async function AdminQuizAttemptResultPage({
                     </div>
                   </div>
 
-                  {a.explanation ? (
+                  {!a.is_correct && !!a.explanation ? (
                     <div className="rounded-xl border border-white/10 bg-white/5 p-3">
                       <div className="text-xs text-muted-foreground mb-1">해설</div>
                       <div className="whitespace-pre-wrap break-words text-sm">
