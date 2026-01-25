@@ -378,21 +378,46 @@ export default function QuillEditor({
           { key: "xml", label: "HTML/XML" },
           { key: "java", label: "Java" },
           { key: "javascript", label: "JavaScript" },
+          { key: "json", label: "JSON" },
+          { key: "kotlin", label: "Kotlin" },
           { key: "markdown", label: "Markdown" },
-          { key: "php", label: "PHP" },
           { key: "python", label: "Python" },
-          { key: "ruby", label: "Ruby" },
           { key: "sql", label: "SQL" },
+          { key: "typescript", label: "TypeScript" },
         ],
       },
-      toolbar: [
-        [{ header: [1, 2, 3, false] }],
-        ["bold", "italic", "underline", "strike"],
-        [{ list: "ordered" }, { list: "bullet" }],
-        ["blockquote", "code-block"],
-        ["link", "image"],
-        ["clean"],
-      ],
+
+      // ✅ 여기부터 핵심: toolbar를 {container, handlers} 형태로
+      toolbar: {
+        container: [
+          [{ header: [1, 2, 3, false] }],
+          ["bold", "italic", "underline", "strike"],
+          [{ list: "ordered" }, { list: "bullet" }],
+          ["blockquote", "code-block"],
+          ["link", "image"],
+          ["clean"],
+        ],
+
+        handlers: {
+          link: function () {
+            const quill = (this as any).quill;
+            const range = quill.getSelection(true);
+            const url = window.prompt("Enter link URL");
+            if (!url) return;
+
+            // ✅ 선택영역 없으면: URL 텍스트를 삽입하면서 링크 적용
+            if (!range || range.length === 0) {
+              const index = range?.index ?? quill.getLength();
+              quill.insertText(index, url, { link: url });
+              quill.setSelection(index + url.length, 0);
+              return;
+            }
+
+            // ✅ 선택영역 있으면: 선택 텍스트에 링크 적용
+            quill.format("link", url);
+          },
+        },
+      },
     };
   }, []);
 
