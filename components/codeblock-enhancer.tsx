@@ -1,56 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import hljs from "highlight.js/lib/core";
+import hljs, { ensureHljsOnWindowOnce } from "@/lib/hljs";
 import "highlight.js/styles/github-dark.css";
-
-// ✅ languages (QuillEditor와 동일)
-import plaintext from "highlight.js/lib/languages/plaintext";
-import bash from "highlight.js/lib/languages/bash";
-import cpp from "highlight.js/lib/languages/cpp";
-import csharp from "highlight.js/lib/languages/csharp";
-import css from "highlight.js/lib/languages/css";
-import diff from "highlight.js/lib/languages/diff";
-import xml from "highlight.js/lib/languages/xml";
-import java from "highlight.js/lib/languages/java";
-import javascript from "highlight.js/lib/languages/javascript";
-import markdown from "highlight.js/lib/languages/markdown";
-import php from "highlight.js/lib/languages/php";
-import python from "highlight.js/lib/languages/python";
-import ruby from "highlight.js/lib/languages/ruby";
-import sql from "highlight.js/lib/languages/sql";
 
 type Props = {
   selector?: string; // 기본: ".post-content"
 };
-
-let HLJS_READY = false;
-function ensureHljsOnce() {
-  if (HLJS_READY) return;
-  HLJS_READY = true;
-
-  try {
-    hljs.registerLanguage("plaintext", plaintext);
-    hljs.registerLanguage("bash", bash);
-    hljs.registerLanguage("cpp", cpp);
-    hljs.registerLanguage("csharp", csharp);
-    hljs.registerLanguage("css", css);
-    hljs.registerLanguage("diff", diff);
-    hljs.registerLanguage("xml", xml);
-    hljs.registerLanguage("java", java);
-    hljs.registerLanguage("javascript", javascript);
-    hljs.registerLanguage("markdown", markdown);
-    hljs.registerLanguage("php", php);
-    hljs.registerLanguage("python", python);
-    hljs.registerLanguage("ruby", ruby);
-    hljs.registerLanguage("sql", sql);
-
-    // alias
-    hljs.registerLanguage("jsx", javascript);
-  } catch {
-    // ignore
-  }
-}
 
 function normalizeLang(raw: string) {
   const v = (raw || "").trim();
@@ -148,7 +104,7 @@ function normalizeQuillLists(root: HTMLElement) {
       }
     }
   }
-}
+} // ✅ 여기 “함수 닫는 중괄호”가 빠져있어서 터진 거임
 
 /**
  * ✅ 저장 후 상세 화면에서도 색 나오게:
@@ -241,7 +197,7 @@ export default function CodeBlockEnhancer({
   selector = ".post-content",
 }: Props) {
   useEffect(() => {
-    ensureHljsOnce();
+    ensureHljsOnWindowOnce();
 
     const roots = Array.from(
       document.querySelectorAll(selector),

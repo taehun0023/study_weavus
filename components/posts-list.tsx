@@ -48,7 +48,13 @@ export async function PostsList({
       WHERE p.course_id = ${courseId}
         AND p.type = 'lesson'
         AND p.difficulty = ${diffDb}
-      ORDER BY p.id DESC
+      ORDER BY
+  CASE
+    WHEN p.title ~ '^[0-9]+' THEN (substring(p.title from '^[0-9]+'))::int
+    ELSE 2147483647
+  END ASC,
+  p.title ASC,
+  p.id DESC
       LIMIT 200
     `;
   } else {
@@ -64,7 +70,13 @@ export async function PostsList({
       JOIN public.courses c ON c.id = p.course_id
       WHERE p.course_id = ${courseId}
         AND p.type = 'lesson'
-      ORDER BY p.id DESC
+      ORDER BY
+  CASE
+    WHEN p.title ~ '^[0-9]+' THEN (substring(p.title from '^[0-9]+'))::int
+    ELSE 2147483647
+  END ASC,
+  p.title ASC,
+  p.id DESC
       LIMIT 200
     `;
   }

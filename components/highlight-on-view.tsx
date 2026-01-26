@@ -1,18 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
-import hljs from "highlight.js/lib/core";
-
-import javascript from "highlight.js/lib/languages/javascript";
-import typescript from "highlight.js/lib/languages/typescript";
-import java from "highlight.js/lib/languages/java";
-import sql from "highlight.js/lib/languages/sql";
-import xml from "highlight.js/lib/languages/xml";
-import css from "highlight.js/lib/languages/css";
-import json from "highlight.js/lib/languages/json";
-import bash from "highlight.js/lib/languages/bash";
-import python from "highlight.js/lib/languages/python";
-
+import { useEffect, type ReactNode } from "react";
+import hljs, { ensureHljsOnWindowOnce } from "@/lib/hljs";
 import "highlight.js/styles/github-dark.css";
 
 function highlight(root: Element) {
@@ -21,60 +10,42 @@ function highlight(root: Element) {
   ) as HTMLElement[];
 
   blocks.forEach((block) => {
-    // 이미 하이라이트 된 건 스킵
     if (block.querySelector(".hljs")) return;
 
-    const code = block.querySelector("code") ?? block;
+    const code = (block.querySelector("code") ?? block) as HTMLElement;
     code.classList.add("hljs");
 
     try {
-      hljs.highlightElement(code as HTMLElement);
+      hljs.highlightElement(code);
     } catch {}
   });
 }
 
 export default function HighlightOnView({
   selector = ".prose",
+  children,
 }: {
   selector?: string;
+  children?: ReactNode;
 }) {
   useEffect(() => {
-    // 언어 등록 (1회)
-    hljs.registerLanguage("javascript", javascript);
-    hljs.registerLanguage("typescript", typescript);
-    hljs.registerLanguage("java", java);
-    hljs.registerLanguage("sql", sql);
-    hljs.registerLanguage("xml", xml);
-    hljs.registerLanguage("css", css);
-    hljs.registerLanguage("json", json);
-    hljs.registerLanguage("bash", bash);
-    hljs.registerLanguage("python", python);
+    ensureHljsOnWindowOnce();
 
     const roots = Array.from(document.querySelectorAll(selector));
     if (roots.length === 0) return;
 
-    // 최초 1회 실행
     roots.forEach(highlight);
 
-    // 🔥 핵심: DOM 변경 감지
-    const observer = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        if (m.type === "childList") {
-          roots.forEach(highlight);
-          break;
-        }
-      }
+    const observer = new MutationObserver(() => {
+      roots.forEach(highlight);
     });
 
     roots.forEach((root) => {
-      observer.observe(root, {
-        childList: true,
-        subtree: true,
-      });
+      observer.observe(root, { childList: true, subtree: true });
     });
 
     return () => observer.disconnect();
   }, [selector]);
 
-  return null;
+  return <>{children}</>;
 }

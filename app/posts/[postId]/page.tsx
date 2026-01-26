@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import HighlightOnView from "@/components/highlight-on-view";
 import PostAdminActions from "@/components/post-admin-actions";
 import CodeBlockEnhancer from "@/components/codeblock-enhancer";
+import { looksLikeHtmlPost as looksLikeHtml } from "@/lib/html/looksLikeHtml";
 
 type Difficulty = "easy" | "medium" | "hard" | "project" | null;
 type PostType = "lesson" | "reference" | "quiz";
@@ -48,10 +49,6 @@ type AttachmentRow = {
   mime: string;
   size: number;
 };
-
-function looksLikeHtml(s: string) {
-  return /<\/?[a-z][\s\S]*>/i.test(s);
-}
 
 function stripLeadingEmptyBlocks(html: string) {
   return html.replace(

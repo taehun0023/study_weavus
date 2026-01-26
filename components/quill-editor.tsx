@@ -4,60 +4,48 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef } from "react";
 import "react-quill-new/dist/quill.snow.css";
 
-import hljs from "highlight.js/lib/core";
-
-// ✅ languages
-import plaintext from "highlight.js/lib/languages/plaintext";
-import bash from "highlight.js/lib/languages/bash";
-import cpp from "highlight.js/lib/languages/cpp";
-import csharp from "highlight.js/lib/languages/csharp";
-import css from "highlight.js/lib/languages/css";
-import diff from "highlight.js/lib/languages/diff";
-import xml from "highlight.js/lib/languages/xml";
-import java from "highlight.js/lib/languages/java";
-import javascript from "highlight.js/lib/languages/javascript";
-import markdown from "highlight.js/lib/languages/markdown";
-import php from "highlight.js/lib/languages/php";
-import python from "highlight.js/lib/languages/python";
-import ruby from "highlight.js/lib/languages/ruby";
-import sql from "highlight.js/lib/languages/sql";
-
+import hljs, { ensureHljsOnWindowOnce } from "@/lib/hljs";
 import "highlight.js/styles/github-dark.css";
 
 const ReactQuill = dynamic(() => import("react-quill-new"), {
   ssr: false,
 }) as any;
 
-const HLJS_READY_KEY = "__hljs_quill_ready__";
+/** ✅ divider blot 등록을 "동기"로 보장 */
+let DIVIDER_READY = false;
 
-function ensureHljsOnWindowOnce() {
+function ensureDividerRegisteredOnce() {
+  if (DIVIDER_READY) return;
   if (typeof window === "undefined") return;
-  const w = window as any;
-
-  if (w.hljs && w[HLJS_READY_KEY]) return;
 
   try {
-    hljs.registerLanguage("plaintext", plaintext);
-    hljs.registerLanguage("bash", bash);
-    hljs.registerLanguage("cpp", cpp);
-    hljs.registerLanguage("csharp", csharp);
-    hljs.registerLanguage("css", css);
-    hljs.registerLanguage("diff", diff);
-    hljs.registerLanguage("xml", xml);
-    hljs.registerLanguage("java", java);
-    hljs.registerLanguage("javascript", javascript);
-    hljs.registerLanguage("markdown", markdown);
-    hljs.registerLanguage("php", php);
-    hljs.registerLanguage("python", python);
-    hljs.registerLanguage("ruby", ruby);
-    hljs.registerLanguage("sql", sql);
-    hljs.registerLanguage("jsx", javascript);
+    // ✅ 핵심: react-quill-new가 사용하는 Quill 인스턴스를 여기서 가져온다 (동기)
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const mod: any = require("react-quill-new");
+    const Q = mod?.Quill;
+    if (!Q) return;
+
+    const BlockEmbed = Q.import("blots/block/embed");
+
+    class DividerBlot extends BlockEmbed {
+      static blotName = "divider";
+      static tagName = "hr";
+    }
+
+    Q.register(DividerBlot, true);
+    try {
+      const icons = Q.import("ui/icons");
+      // 간단한 hr 아이콘 (가로선)
+      icons["divider"] =
+        '<svg viewBox="0 0 18 18"><line x1="2" y1="9" x2="16" y2="9" stroke="currentColor" stroke-width="2"/></svg>';
+    } catch {
+      // ignore
+    }
+
+    DIVIDER_READY = true;
   } catch {
     // ignore
   }
-
-  w.hljs = w.hljs || hljs;
-  w[HLJS_READY_KEY] = true;
 }
 
 function injectDataLanguage(html: string) {
@@ -115,8 +103,6 @@ function injectDataLanguage(html: string) {
 
 /**
  * ✅ 붙여넣기(clipboard) 시 표/문서에서 따라오는 색상 포맷 제거
- * - 구글독스/노션/웹페이지 표 복붙하면 인라인 color/background가 붙어서 다크모드에서 깨짐
- * - 여기서 table cell에 섞여 들어오는 color/background 포맷을 제거해버림
  */
 function installClipboardSanitizer(quill: any) {
   const clipboard = quill?.getModule?.("clipboard");
@@ -127,7 +113,6 @@ function installClipboardSanitizer(quill: any) {
       if (!delta?.ops) return delta;
       delta.ops = delta.ops.map((op: any) => {
         if (op?.attributes) {
-          // Quill 포맷: color/background 제거
           const { color, background, ...rest } = op.attributes;
           op.attributes = rest;
           if (Object.keys(op.attributes).length === 0) {
@@ -136,24 +121,16 @@ function installClipboardSanitizer(quill: any) {
         }
         return op;
       });
-    } catch {
-      // ignore
-    }
+    } catch {}
     return delta;
   };
 
-  // TD/TH/PRE 등에서 들어오는 색상 포맷을 제거
   clipboard.addMatcher("TD", (node: any, delta: any) => {
-    // 1) 기존: 색/배경 제거
     delta = stripColorAndBgFromDelta(delta);
 
-    // 2) 추가: 셀 내부 줄바꿈을 최대한 유지
-    //    (복붙 시 줄바꿈이 공백으로 합쳐지는 케이스 방어)
     try {
       const text = typeof node?.innerText === "string" ? node.innerText : "";
       if (text.includes("\n")) {
-        // Quill은 insert 문자열에 '\n'이 있으면 줄바꿈으로 처리해줌
-        // (단일 텍스트로 들어오는 케이스를 중심으로 보정)
         if (
           delta?.ops?.length === 1 &&
           typeof delta.ops[0]?.insert === "string"
@@ -161,9 +138,7 @@ function installClipboardSanitizer(quill: any) {
           delta.ops[0].insert = text;
         }
       }
-    } catch {
-      // ignore
-    }
+    } catch {}
 
     return delta;
   });
@@ -184,7 +159,6 @@ function installTablePasteNormalizer(quill: any) {
   if (!root) return;
 
   const sanitizeStyleAttrsInTable = (table: HTMLElement) => {
-    // style 속성에서 color/background 제거
     const styled = Array.from(
       table.querySelectorAll("[style]"),
     ) as HTMLElement[];
@@ -243,7 +217,6 @@ function installTablePasteNormalizer(quill: any) {
         ) as HTMLTableRowElement[];
         if (rows.length === 0) continue;
 
-        // 최빈 컬럼 수(모드)
         const freq = new Map<number, number>();
         for (const r of rows) {
           const c = countCols(r);
@@ -265,7 +238,6 @@ function installTablePasteNormalizer(quill: any) {
           ) as HTMLTableCellElement[];
           let currentCols = countCols(tr);
 
-          // 초과 컬럼 -> 마지막 칸에 <br>로 합치기
           while (currentCols > targetCols && cells.length > 1) {
             const extra = cells.pop();
             const last = cells[cells.length - 1];
@@ -283,7 +255,6 @@ function installTablePasteNormalizer(quill: any) {
             currentCols = countCols(tr);
           }
 
-          // 부족 컬럼 -> 빈칸 채우기
           while (currentCols < targetCols) {
             const td = doc.createElement("td");
             td.innerHTML = "";
@@ -299,7 +270,6 @@ function installTablePasteNormalizer(quill: any) {
     }
   };
 
-  // ✅ 핵심: 중복 리스너 방지 (같은 root에 이미 있으면 제거)
   const anyRoot = root as any;
   if (anyRoot.__studyTablePasteHandler) {
     root.removeEventListener("paste", anyRoot.__studyTablePasteHandler, true);
@@ -311,9 +281,8 @@ function installTablePasteNormalizer(quill: any) {
     if (!cd) return;
 
     const html = cd.getData("text/html");
-    if (!html || !html.includes("<table")) return; // table paste만 가로챔
+    if (!html || !html.includes("<table")) return;
 
-    // ✅ Quill 기본 paste가 또 실행되지 않게 강하게 차단
     e.preventDefault();
     e.stopPropagation();
     // @ts-ignore
@@ -325,7 +294,6 @@ function installTablePasteNormalizer(quill: any) {
     quill.clipboard.dangerouslyPasteHTML(index, normalized, "user");
   };
 
-  // ✅ capture 단계(true)에서 먼저 잡는다
   root.addEventListener("paste", handler, true);
   anyRoot.__studyTablePasteHandler = handler;
 }
@@ -334,7 +302,6 @@ type QuillEditorProps = {
   value: string;
   onChange: (v: string) => void;
 
-  /** sticky toolbar */
   stickyToolbar?: boolean;
   stickyTopPx?: number;
   maxWidthPx?: number;
@@ -354,6 +321,7 @@ export default function QuillEditor({
 }: QuillEditorProps) {
   useEffect(() => {
     ensureHljsOnWindowOnce();
+    ensureDividerRegisteredOnce(); // ✅ 여기서 먼저 등록
   }, []);
 
   const quillRef = useRef<any>(null);
@@ -387,7 +355,6 @@ export default function QuillEditor({
         ],
       },
 
-      // ✅ 여기부터 핵심: toolbar를 {container, handlers} 형태로
       toolbar: {
         container: [
           [{ header: [1, 2, 3, false] }],
@@ -395,9 +362,9 @@ export default function QuillEditor({
           [{ list: "ordered" }, { list: "bullet" }],
           ["blockquote", "code-block"],
           ["link", "image"],
+          ["divider"],
           ["clean"],
         ],
-
         handlers: {
           link: function () {
             const quill = (this as any).quill;
@@ -405,23 +372,31 @@ export default function QuillEditor({
             const url = window.prompt("Enter link URL");
             if (!url) return;
 
-            // ✅ 선택영역 없으면: URL 텍스트를 삽입하면서 링크 적용
             if (!range || range.length === 0) {
               const index = range?.index ?? quill.getLength();
               quill.insertText(index, url, { link: url });
               quill.setSelection(index + url.length, 0);
               return;
             }
-
-            // ✅ 선택영역 있으면: 선택 텍스트에 링크 적용
             quill.format("link", url);
+          },
+
+          divider: function () {
+            // ✅ 여기서도 한 번 더 보장 (HMR/초기 타이밍 방어)
+            ensureDividerRegisteredOnce();
+
+            const quill = (this as any).quill;
+            const range = quill.getSelection(true);
+            const index = range?.index ?? quill.getLength();
+
+            quill.insertEmbed(index, "divider", true, "user");
+            quill.setSelection(index + 1, 0);
           },
         },
       },
     };
   }, []);
 
-  // ✅ 파란 영역(ql-container) 아무데나 클릭해도 커서 들어가게
   const handleMouseDownCapture = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement | null;
     if (!target) return;
@@ -455,7 +430,6 @@ export default function QuillEditor({
     ? "rounded-md border border-border editor-dark"
     : "rounded-md border border-border overflow-hidden editor-dark";
 
-  // ✅ Quill 인스턴스 준비되면 clipboard sanitizer 1회 설치
   const maybeInitClipboard = () => {
     if (clipboardInitRef.current) return;
     const quill = quillRef.current?.getEditor?.();
@@ -470,7 +444,6 @@ export default function QuillEditor({
       <ReactQuill
         ref={(instance: any) => {
           quillRef.current = instance;
-          // ref 세팅 타이밍에 init 시도
           setTimeout(maybeInitClipboard, 0);
         }}
         value={value}
@@ -505,7 +478,6 @@ export default function QuillEditor({
           padding-right: 16px;
         }
 
-        /* ✅ 툴바 스타일 (기본 유지) */
         .editor-dark .ql-toolbar.ql-snow {
           background: color-mix(in oklab, var(--color-card) 92%, black 8%);
           border-color: var(--color-border);
@@ -569,13 +541,6 @@ export default function QuillEditor({
           overflow-x: auto;
         }
 
-        /* =========================================================
-           ✅ 여기부터 “표 다크모드 고정 스타일”
-           - 기본 UI/레이아웃은 건들지 않고
-           - 에디터 내부(table)에서만 강제로 가독성 확보
-           - 복붙 인라인 스타일(color/background)도 !important로 덮어씀
-           ========================================================= */
-
         .editor-dark .ql-editor table {
           width: 100%;
           border-collapse: collapse;
@@ -612,7 +577,6 @@ export default function QuillEditor({
           ) !important;
         }
 
-        /* 표 안에서 링크/코드/텍스트 컬러도 다크모드로 통일 */
         .editor-dark .ql-editor table a {
           color: var(--color-primary) !important;
           text-decoration: underline;

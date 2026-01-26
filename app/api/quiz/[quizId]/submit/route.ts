@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import { parseOptions } from "@/lib/quiz/parseOptions";
 
 type Body =
   | {
@@ -8,20 +9,6 @@ type Body =
       questionOrder?: any;
     }
   | any;
-
-// ✅ options 파싱(배열/JSON 문자열/기타 형태 방어)
-function parseOptions(raw: any): string[] {
-  if (Array.isArray(raw)) return raw.map((v) => String(v));
-  if (typeof raw === "string") {
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed.map((v) => String(v));
-    } catch {
-      // ignore
-    }
-  }
-  return [];
-}
 
 // ✅ 빈값 판정: "미작성"을 명확히 구분
 function isBlank(v: any): boolean {
@@ -139,15 +126,17 @@ export async function POST(
           : -1;
 
       // ✅ 가장 중요: 미작성은 무조건 오답
-      
+
       const isCorrect = (() => {
         if (unanswered) return false;
 
         // multiple_choice: 기본은 단일 정답(index). (레거시: 보기 텍스트도 허용)
         if (q.question_type === "multiple_choice") {
           return (
-            (normalizedUserIndex != null && String(normalizedUserIndex) === String(correctRaw).trim()) ||
-            normalizeForCompare(userAnswerText) === normalizeForCompare(correctRaw)
+            (normalizedUserIndex != null &&
+              String(normalizedUserIndex) === String(correctRaw).trim()) ||
+            normalizeForCompare(userAnswerText) ===
+              normalizeForCompare(correctRaw)
           );
         }
 
@@ -157,14 +146,18 @@ export async function POST(
           const c = normalizeForCompare(correctRaw).toLowerCase();
 
           const uNorm =
-            u === "o" || u === "true" || u === "1" ? "true" :
-            u === "x" || u === "false" || u === "0" ? "false" :
-            u;
+            u === "o" || u === "true" || u === "1"
+              ? "true"
+              : u === "x" || u === "false" || u === "0"
+                ? "false"
+                : u;
 
           const cNorm =
-            c === "o" || c === "true" || c === "1" ? "true" :
-            c === "x" || c === "false" || c === "0" ? "false" :
-            c;
+            c === "o" || c === "true" || c === "1"
+              ? "true"
+              : c === "x" || c === "false" || c === "0"
+                ? "false"
+                : c;
 
           return uNorm === cNorm;
         }
@@ -172,7 +165,9 @@ export async function POST(
         // short_answer: 앞/뒤 공백만 제거 후, 대소문자/띄어쓰기는 엄격 비교
         // (확장: 출제자가 "||"로 여러 정답을 넣은 경우 중 하나만 일치해도 정답)
         const correctStr = String(correctRaw ?? "");
-        const candidates = correctStr.split("||").map((x) => x.replace(/\r\n/g, "\n").trim());
+        const candidates = correctStr
+          .split("||")
+          .map((x) => x.replace(/\r\n/g, "\n").trim());
         const userNorm = normalizeForCompare(userAnswerText);
 
         return candidates.some((c) => userNorm === normalizeForCompare(c));

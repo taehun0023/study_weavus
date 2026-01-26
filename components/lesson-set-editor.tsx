@@ -224,7 +224,10 @@ export default function LessonSetEditor({
           // ✅ 정답은 "보기 index"("0","1",...) 또는 (레거시) 보기 텍스트도 허용
           const idx = Number.parseInt(ca, 10);
           const isIndex =
-            Number.isFinite(idx) && String(idx) === ca && idx >= 0 && idx < opts.length;
+            Number.isFinite(idx) &&
+            String(idx) === ca &&
+            idx >= 0 &&
+            idx < opts.length;
           const isLegacyText = opts.includes(ca);
 
           if (!isIndex && !isLegacyText) return false;
@@ -681,9 +684,11 @@ export default function LessonSetEditor({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="multiple_choice">객관식</SelectItem>
-                         <SelectItem value="true_false">O/X</SelectItem>
-                         <SelectItem value="number">숫자</SelectItem>
-                         <SelectItem value="short_answer">주관식(텍스트)</SelectItem>
+                        <SelectItem value="true_false">O/X</SelectItem>
+                        <SelectItem value="number">숫자</SelectItem>
+                        <SelectItem value="short_answer">
+                          주관식(텍스트)
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -714,7 +719,9 @@ export default function LessonSetEditor({
 
                       {q.options.map((opt, j) => {
                         const optText = opt ?? "";
-                        const checked = q.correctAnswer.trim() !== "" && q.correctAnswer === String(j);
+                        const checked =
+                          q.correctAnswer.trim() !== "" &&
+                          q.correctAnswer === String(j);
                         return (
                           <div key={j} className="flex items-center gap-2">
                             <label className="flex items-center gap-2 text-sm text-muted-foreground w-[90px]">
@@ -723,7 +730,9 @@ export default function LessonSetEditor({
                                 name={`correct-${q.key}`}
                                 checked={checked}
                                 onChange={() =>
-                                  updateQuestion(idx, { correctAnswer: String(j) })
+                                  updateQuestion(idx, {
+                                    correctAnswer: String(j),
+                                  })
                                 }
                               />
                               정답
@@ -758,20 +767,31 @@ export default function LessonSetEditor({
                       })}
 
                       <div className="text-xs text-muted-foreground">
-                        ※ 정답은 “선택지 번호(index)”로 저장됩니다. (공백/줄바꿈 영향 없음)
+                        ※ 정답은 “선택지 번호(index)”로 저장됩니다. (공백/줄바꿈
+                        영향 없음)
                       </div>
                     </div>
                   ) : q.questionType === "true_false" ? (
                     <div className="space-y-2 pt-2">
-                      <div className="text-sm text-muted-foreground">정답(O/X)</div>
+                      <div className="text-sm text-muted-foreground">
+                        정답(O/X)
+                      </div>
                       <div className="flex gap-3">
-                        {[{k:"true", label:"O"},{k:"false", label:"X"}].map((it)=> (
-                          <label key={it.k} className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/10 px-4 py-2 text-sm cursor-pointer">
+                        {[
+                          { k: "true", label: "O" },
+                          { k: "false", label: "X" },
+                        ].map((it) => (
+                          <label
+                            key={it.k}
+                            className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/10 px-4 py-2 text-sm cursor-pointer"
+                          >
                             <input
                               type="radio"
                               name={`tf-${q.key}`}
                               checked={q.correctAnswer === it.k}
-                              onChange={() => updateQuestion(idx, { correctAnswer: it.k })}
+                              onChange={() =>
+                                updateQuestion(idx, { correctAnswer: it.k })
+                              }
                             />
                             <span>{it.label}</span>
                           </label>
@@ -780,11 +800,15 @@ export default function LessonSetEditor({
                     </div>
                   ) : q.questionType === "number" ? (
                     <div className="space-y-2 pt-2">
-                      <div className="text-sm text-muted-foreground">정답(숫자)</div>
+                      <div className="text-sm text-muted-foreground">
+                        정답(숫자)
+                      </div>
                       <Input
                         type="number"
                         value={q.correctAnswer}
-                        onChange={(e) => updateQuestion(idx, { correctAnswer: e.target.value })}
+                        onChange={(e) =>
+                          updateQuestion(idx, { correctAnswer: e.target.value })
+                        }
                         placeholder="예: 42"
                         className="rounded-xl bg-black/20"
                       />
@@ -814,11 +838,15 @@ export default function LessonSetEditor({
                   )}
 
                   <div className="space-y-2 pt-4">
-                    <div className="text-sm text-muted-foreground">문제풀이(해설)</div>
+                    <div className="text-sm text-muted-foreground">
+                      문제풀이(해설)
+                    </div>
                     <div className="rounded-xl border border-border bg-black/10 p-3">
                       <QuillEditor
                         value={q.explanation ?? ""}
-                        onChange={(v) => updateQuestion(idx, { explanation: v })}
+                        onChange={(v) =>
+                          updateQuestion(idx, { explanation: v })
+                        }
                         stickyToolbar={false}
                         maxWidthPx={9999}
                         minHeightPx={160}
@@ -846,7 +874,11 @@ export default function LessonSetEditor({
           </TabsContent>
         </Tabs>
 
-        <Button onClick={saveBundle} disabled={!canSave}>
+        <Button
+          className="h-12 w-full"
+          onClick={saveBundle}
+          disabled={!canSave}
+        >
           {saving ? "저장 중..." : "세트 저장"}
         </Button>
       </CardContent>

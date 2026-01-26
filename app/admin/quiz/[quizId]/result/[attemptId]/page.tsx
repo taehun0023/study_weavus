@@ -7,15 +7,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import HighlightOnView from "@/components/highlight-on-view";
+import { looksLikeHtmlPost as looksLikeHtml } from "@/lib/html/looksLikeHtml";
 
 interface PageProps {
   params: Promise<{ quizId: string; attemptId: string }>;
   searchParams?: Promise<{ lessonId?: string }>;
-}
-
-function looksLikeHtml(s: any): boolean {
-  const v = String(s ?? "");
-  return /<\w[\s\S]*>/.test(v);
 }
 
 function splitTitleFromHtml(html: string): { title: string; bodyHtml: string } {
@@ -145,7 +141,8 @@ export default async function AdminQuizAttemptResultPage({
           <CardContent className="pt-6">
             <div className="space-y-2">
               <div className="text-sm text-muted-foreground">
-                제출자: {attempt.display_name ?? attempt.username} ({attempt.username})
+                제출자: {attempt.display_name ?? attempt.username} (
+                {attempt.username})
               </div>
               <div className="text-xl font-semibold">{attempt.quiz_title}</div>
 
@@ -175,7 +172,9 @@ export default async function AdminQuizAttemptResultPage({
           {sortedAnswers.map((a, idx) => {
             const rawQ = String(a.question_text ?? "");
             const isHtml = looksLikeHtml(rawQ);
-            const parts = isHtml ? splitTitleFromHtml(rawQ) : { title: rawQ, bodyHtml: "" };
+            const parts = isHtml
+              ? splitTitleFromHtml(rawQ)
+              : { title: rawQ, bodyHtml: "" };
 
             return (
               <Card
@@ -185,18 +184,28 @@ export default async function AdminQuizAttemptResultPage({
                 <CardContent className="pt-6 space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-sm text-muted-foreground">Q{idx + 1}</div>
-                      <div className="font-semibold break-words">{parts.title}</div>
+                      <div className="text-sm text-muted-foreground">
+                        Q{idx + 1}
+                      </div>
+                      <div className="font-semibold break-words">
+                        {parts.title}
+                      </div>
                     </div>
                     {a.is_correct ? (
-                      <Badge className="bg-green-500/20 text-green-300 border-green-500/30">정답</Badge>
+                      <Badge className="bg-green-500/20 text-green-300 border-green-500/30">
+                        정답
+                      </Badge>
                     ) : (
-                      <Badge className="bg-red-500/20 text-red-300 border-red-500/30">오답</Badge>
+                      <Badge className="bg-red-500/20 text-red-300 border-red-500/30">
+                        오답
+                      </Badge>
                     )}
                   </div>
 
                   {parts.bodyHtml ? (
-                    <HighlightOnView selector={`admin-attempt-q-${a.question_id}`}>
+                    <HighlightOnView
+                      selector={`admin-attempt-q-${a.question_id}`}
+                    >
                       <div
                         className={`prose prose-invert max-w-none admin-attempt-q-${a.question_id}`}
                         dangerouslySetInnerHTML={{ __html: parts.bodyHtml }}
@@ -205,15 +214,21 @@ export default async function AdminQuizAttemptResultPage({
                   ) : null}
 
                   <div className="grid gap-3 md:grid-cols-2">
-                    <div className={`rounded-xl border p-3 ${a.is_correct ? "border-green-500/20 bg-green-500/5" : "border-red-500/20 bg-red-500/5"}`}>
-                      <div className="text-xs text-muted-foreground mb-1">내 답</div>
+                    <div
+                      className={`rounded-xl border p-3 ${a.is_correct ? "border-green-500/20 bg-green-500/5" : "border-red-500/20 bg-red-500/5"}`}
+                    >
+                      <div className="text-xs text-muted-foreground mb-1">
+                        내 답
+                      </div>
                       <div className="whitespace-pre-wrap break-words text-sm">
                         {String(a.user_answer ?? "") || "(빈 값)"}
                       </div>
                     </div>
 
                     <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-3">
-                      <div className="text-xs text-muted-foreground mb-1">정답</div>
+                      <div className="text-xs text-muted-foreground mb-1">
+                        정답
+                      </div>
                       <div className="whitespace-pre-wrap break-words text-sm">
                         {String(a.correct_answer ?? "") || "-"}
                       </div>
@@ -222,7 +237,9 @@ export default async function AdminQuizAttemptResultPage({
 
                   {!a.is_correct && !!a.explanation ? (
                     <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                      <div className="text-xs text-muted-foreground mb-1">해설</div>
+                      <div className="text-xs text-muted-foreground mb-1">
+                        해설
+                      </div>
                       <div className="whitespace-pre-wrap break-words text-sm">
                         {String(a.explanation)}
                       </div>
@@ -234,7 +251,9 @@ export default async function AdminQuizAttemptResultPage({
           })}
 
           {sortedAnswers.length === 0 ? (
-            <div className="text-sm text-muted-foreground">결과가 없습니다.</div>
+            <div className="text-sm text-muted-foreground">
+              결과가 없습니다.
+            </div>
           ) : null}
         </div>
       </main>

@@ -12,17 +12,14 @@ import HighlightOnView from "@/components/highlight-on-view";
 import CodeBlockEnhancer from "@/components/codeblock-enhancer";
 import CopyInlineButton from "@/components/quiz/copy-inline-button";
 import RetryWithPrefillButton from "@/components/quiz/retry-with-prefill-button";
+import { parseOptions } from "@/lib/quiz/parseOptions";
+import { looksLikeHtmlPost as looksLikeHtml } from "@/lib/html/looksLikeHtml";
 
 interface ResultPageProps {
   params: Promise<{
     quizId: string;
     attemptId: string;
   }>;
-}
-
-function looksLikeHtml(s: any): boolean {
-  const v = String(s ?? "");
-  return /<\w[\s\S]*>/.test(v);
 }
 
 // Quill 기본: 첫 줄이 <p>... (질문) 형태인 경우가 많아서
@@ -47,20 +44,6 @@ function splitTitleFromHtml(html: string): { title: string; bodyHtml: string } {
 
   const bodyHtml = v.slice(m[0].length).trim();
   return { title, bodyHtml };
-}
-
-// ✅ options 파싱(배열/JSON 문자열/기타 형태 방어)
-function parseOptions(raw: any): string[] {
-  if (Array.isArray(raw)) return raw.map((v) => String(v));
-  if (typeof raw === "string") {
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed.map((v) => String(v));
-    } catch {
-      // ignore
-    }
-  }
-  return [];
 }
 
 function normalizeForCompare(input: any) {
@@ -301,8 +284,16 @@ export default async function ResultPage({ params }: ResultPageProps) {
             const bodySelector = `result-prose-${answer.question_id}`;
 
             const state = String(answer.answer_state ?? "").toLowerCase();
-            const myAnswerText = displayAnswer(answer.question_type, answer.user_answer, answer.options);
-            const correctText = displayAnswer(answer.question_type, answer.correct_answer, answer.options);
+            const myAnswerText = displayAnswer(
+              answer.question_type,
+              answer.user_answer,
+              answer.options,
+            );
+            const correctText = displayAnswer(
+              answer.question_type,
+              answer.correct_answer,
+              answer.options,
+            );
 
             const isUnanswered =
               state === "unanswered" || isBlank(myAnswerText);
@@ -399,7 +390,9 @@ export default async function ResultPage({ params }: ResultPageProps) {
                       {looksLikeHtml(answer.explanation) ? (
                         <>
                           <HighlightOnView selector={`.${bodySelector}-exp`} />
-                          <CodeBlockEnhancer selector={`.${bodySelector}-exp`} />
+                          <CodeBlockEnhancer
+                            selector={`.${bodySelector}-exp`}
+                          />
                           <div
                             className={`${bodySelector}-exp prose prose-invert max-w-none`}
                             dangerouslySetInnerHTML={{
