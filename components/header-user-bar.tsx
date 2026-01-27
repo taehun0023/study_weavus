@@ -94,11 +94,28 @@ export default function HeaderUserBar({
         <Link href="/interviews">면접</Link>
       </Button>
 
-      <span className="whitespace-nowrap">
-        {displayName} ({user.username})
-      </span>
+      {/* ✅ 로그인 유저 아이디(표시명) 클릭 → 유저 정보 수정 */}
+      <Button asChild variant="ghost" size="sm" type="button">
+        <Link
+          href={
+            user.user_role === "ADMIN"
+              ? `/admin/users/${user.id}/edit`
+              : "/account"
+          }
+        >
+          <span className="whitespace-nowrap">
+            {displayName} ({user.username})
+          </span>
+        </Link>
+      </Button>
 
-      <Button onClick={onLogout} variant="outline" size="sm" type="button">
+      <Button
+        onClick={onLogout}
+        variant="outline"
+        size="sm"
+        type="button"
+        className="cursor-pointer"
+      >
         로그아웃
       </Button>
     </div>

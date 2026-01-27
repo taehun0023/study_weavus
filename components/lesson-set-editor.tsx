@@ -398,16 +398,51 @@ export default function LessonSetEditor({
           : null,
         questions: hasQuizTitle
           ? questions.map((q, idx) => {
-              const opts =
-                q.questionType === "multiple_choice"
-                  ? q.options.map((x) => x.trim()).filter(Boolean)
-                  : undefined;
+              // ✅ 객관식: 옵션 정리(빈칸 제거)하면서 정답 index 재매핑 + explanation 저장
+              if (q.questionType === "multiple_choice") {
+                const original = (q.options ?? []).map((x) =>
+                  String(x ?? "").trim(),
+                );
 
+                // oldIndex -> newIndex 매핑
+                const mapOldToNew = new Map<number, number>();
+                const opts: string[] = [];
+                for (let i = 0; i < original.length; i++) {
+                  const v = original[i];
+                  if (!v) continue;
+                  mapOldToNew.set(i, opts.length);
+                  opts.push(v);
+                }
+
+                const caRaw = String(q.correctAnswer ?? "").trim();
+                let nextCA = caRaw;
+
+                // 정답이 index 문자열이면 새 index로 변환
+                const caIdx = Number.parseInt(caRaw, 10);
+                const isIndex =
+                  Number.isFinite(caIdx) && String(caIdx) === caRaw;
+                if (isIndex) {
+                  const mapped = mapOldToNew.get(caIdx);
+                  nextCA = typeof mapped === "number" ? String(mapped) : "";
+                }
+
+                return {
+                  questionText: String(q.questionText ?? "").trim(),
+                  questionType: q.questionType,
+                  options: opts,
+                  correctAnswer: nextCA,
+                  explanation: String((q as any).explanation ?? "").trim(), // ✅ 핵심
+                  orderIndex: idx + 1,
+                };
+              }
+
+              // ✅ true_false / short_answer / number 등: explanation 포함
               return {
-                questionText: q.questionText.trim(),
+                questionText: String(q.questionText ?? "").trim(),
                 questionType: q.questionType,
-                options: opts,
-                correctAnswer: q.correctAnswer.trim(),
+                options: undefined,
+                correctAnswer: String(q.correctAnswer ?? "").trim(),
+                explanation: String((q as any).explanation ?? "").trim(), // ✅ 핵심
                 orderIndex: idx + 1,
               };
             })

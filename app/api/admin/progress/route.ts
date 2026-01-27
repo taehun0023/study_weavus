@@ -51,14 +51,14 @@ export async function GET(req: Request) {
     if ((qFrom && !qTo) || (!qFrom && qTo)) {
       return NextResponse.json(
         { message: "from/to must be both provided or both omitted" },
-        { status: 400 }
+        { status: 400 },
       );
     }
     if (hasExplicitRange) {
       if (!isValidISODate(qFrom!) || !isValidISODate(qTo!)) {
         return NextResponse.json(
           { message: "from/to must be YYYY-MM-DD" },
-          { status: 400 }
+          { status: 400 },
         );
       }
     }
@@ -76,91 +76,95 @@ export async function GET(req: Request) {
     // ✅ users: 기본(전체유저)은 "전체기간 누적", 기간 지정이면 "기간 내 + completed>0"
     const users = hasExplicitRange
       ? await sql<ProgressUserRow>`
-          WITH first_perfect AS (
-            SELECT
-              qa.user_id,
-              qa.post_id,
-              min(qa.created_at) AS first_at
-            FROM quiz_attempts qa
-            WHERE qa.is_perfect IS TRUE
-            GROUP BY qa.user_id, qa.post_id
-          ),
-          first_perfect_range AS (
-            SELECT *
-            FROM first_perfect fp
-            WHERE fp.first_at::date BETWEEN ${qFrom!}::date AND ${qTo!}::date
-          ),
-          user_done AS (
-            SELECT
-              u.id AS user_id,
-              u.username,
-              u.display_name,
-              count(fpr.post_id)::int AS completed,
-              max(fpr.first_at) AS last_raised_at
-            FROM users u
-            LEFT JOIN first_perfect_range fpr ON fpr.user_id = u.id
-            LEFT JOIN posts p ON p.id = fpr.post_id
-            LEFT JOIN courses c ON c.id = p.course_id
-            WHERE u.user_role = 'USER'
-              AND (
-                p.id IS NULL
-                OR (p.type = 'quiz' AND lower(c.slug) = ${course})
-              )
-            GROUP BY u.id, u.username, u.display_name
-          )
-          SELECT
-            user_id,
-            username,
-            display_name,
-            completed,
-            CASE
-              WHEN last_raised_at IS NULL THEN NULL
-              ELSE to_char(last_raised_at, 'YYYY-MM-DD HH24:MI')
-            END AS last_raised_at
-          FROM user_done
-          WHERE completed > 0
-          ORDER BY completed DESC, username ASC
-        `
+  WITH first_perfect AS (
+    SELECT
+      qa.user_id,
+      qa.post_id,
+      min(qa.created_at) AS first_at
+    FROM quiz_attempts qa
+    WHERE qa.is_perfect IS TRUE
+    GROUP BY qa.user_id, qa.post_id
+  ),
+  first_perfect_range AS (
+    SELECT *
+    FROM first_perfect fp
+    WHERE fp.first_at::date BETWEEN ${qFrom!}::date AND ${qTo!}::date
+  ),
+  first_perfect_course AS (
+    SELECT fpr.*
+    FROM first_perfect_range fpr
+    JOIN posts p ON p.id = fpr.post_id
+    JOIN courses c ON c.id = p.course_id
+    WHERE p.type='quiz'
+      AND lower(c.slug) = ${course}
+  ),
+  user_done AS (
+    SELECT
+      u.id AS user_id,
+      u.username,
+      u.display_name,
+      count(fpc.post_id)::int AS completed,
+      max(fpc.first_at) AS last_raised_at
+    FROM users u
+    LEFT JOIN first_perfect_course fpc ON fpc.user_id = u.id
+    WHERE u.user_role = 'USER'
+    GROUP BY u.id, u.username, u.display_name
+  )
+  SELECT
+    user_id,
+    username,
+    display_name,
+    completed,
+    CASE
+      WHEN last_raised_at IS NULL THEN NULL
+      ELSE to_char(last_raised_at, 'YYYY-MM-DD HH24:MI')
+    END AS last_raised_at
+  FROM user_done
+  WHERE completed > 0
+  ORDER BY completed DESC, username ASC
+`
       : await sql<ProgressUserRow>`
-          WITH first_perfect AS (
-            SELECT
-              qa.user_id,
-              qa.post_id,
-              min(qa.created_at) AS first_at
-            FROM quiz_attempts qa
-            WHERE qa.is_perfect IS TRUE
-            GROUP BY qa.user_id, qa.post_id
-          ),
-          user_done AS (
-            SELECT
-              u.id AS user_id,
-              u.username,
-              u.display_name,
-              count(fp.post_id)::int AS completed,
-              max(fp.first_at) AS last_raised_at
-            FROM users u
-            LEFT JOIN first_perfect fp ON fp.user_id = u.id
-            LEFT JOIN posts p ON p.id = fp.post_id
-            LEFT JOIN courses c ON c.id = p.course_id
-            WHERE u.user_role = 'USER'
-              AND (
-                p.id IS NULL
-                OR (p.type = 'quiz' AND lower(c.slug) = ${course})
-              )
-            GROUP BY u.id, u.username, u.display_name
-          )
+        WITH first_perfect AS (
           SELECT
-            user_id,
-            username,
-            display_name,
-            completed,
-            CASE
-              WHEN last_raised_at IS NULL THEN NULL
-              ELSE to_char(last_raised_at, 'YYYY-MM-DD HH24:MI')
-            END AS last_raised_at
-          FROM user_done
-          ORDER BY completed DESC, username ASC
-        `;
+            qa.user_id,
+            qa.post_id,
+            min(qa.created_at) AS first_at
+          FROM quiz_attempts qa
+          WHERE qa.is_perfect IS TRUE
+          GROUP BY qa.user_id, qa.post_id
+        ),
+        first_perfect_course AS (
+          SELECT fp.*
+          FROM first_perfect fp
+          JOIN posts p ON p.id = fp.post_id
+          JOIN courses c ON c.id = p.course_id
+          WHERE p.type = 'quiz'
+            AND lower(c.slug) = ${course}
+        ),
+        user_done AS (
+          SELECT
+            u.id AS user_id,
+            u.username,
+            u.display_name,
+            count(fpc.post_id)::int AS completed,
+            max(fpc.first_at) AS last_raised_at
+          FROM users u
+          LEFT JOIN first_perfect_course fpc ON fpc.user_id = u.id
+          WHERE u.user_role = 'USER'
+          GROUP BY u.id, u.username, u.display_name
+        )
+        SELECT
+          user_id,
+          username,
+          display_name,
+          completed,
+          CASE
+            WHEN last_raised_at IS NULL THEN NULL
+            ELSE to_char(last_raised_at, 'YYYY-MM-DD HH24:MI')
+          END AS last_raised_at
+        FROM user_done
+        ORDER BY completed DESC, username ASC
+      `;
 
     // ✅ detail/timeline: 기간 지정일 때만 제공(불필요한 대량 데이터 방지)
     let detail: ProgressDetailRow[] = [];
@@ -262,7 +266,7 @@ export async function GET(req: Request) {
           where: e?.where,
         },
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

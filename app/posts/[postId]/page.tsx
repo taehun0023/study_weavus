@@ -131,23 +131,28 @@ function AttachmentsBlock({
   return (
     <div className="pt-2">
       <div className="text-xs text-muted-foreground mb-2">{title}</div>
-      <div className="grid gap-2">
+
+      <div className="space-y-2">
         {attachments.map((a) => (
           <a
             key={a.upload_id}
             href={`/api/upload/${a.upload_id}`}
-            className="rounded-lg border border-border bg-card px-4 py-3 hover:bg-accent transition"
+            className="flex items-center justify-between gap-3 rounded-md border border-border bg-card/40 px-3 py-2 text-sm hover:bg-accent transition"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="truncate font-medium">
-                  {a.label?.trim() ? a.label : a.filename}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {a.mime} {a.size ? `· ${formatBytes(a.size)}` : ""}
-                </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-medium">
+                {a.label?.trim() ? a.label : a.filename}
               </div>
-              <div className="text-xs text-muted-foreground">다운로드</div>
+
+              {a.size ? (
+                <div className="text-xs text-muted-foreground">
+                  {formatBytes(a.size)}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="shrink-0 text-xs text-muted-foreground">
+              다운로드
             </div>
           </a>
         ))}
@@ -305,6 +310,15 @@ export default async function PostDetailPage({
             <CardTitle className="text-2xl">{post.title}</CardTitle>
             {/* ✅ 여기 마진이 “보라색” 주범이었음 */}
             <hr className="mt-3 mb-0 border-white/10" />
+
+            {post.type === "lesson" ? (
+              <div className="mt-5">
+                <AttachmentsBlock
+                  title="수업 첨부파일"
+                  attachments={lessonAttachments}
+                />
+              </div>
+            ) : null}
           </CardHeader>
 
           {/* ✅ CardContent의 space-y-6 제거 → 필요한 곳만 mt로 제어 */}
@@ -328,15 +342,6 @@ export default async function PostDetailPage({
                 <AttachmentsBlock
                   title="첨부파일"
                   attachments={currentAttachments}
-                />
-              </div>
-            ) : null}
-
-            {post.type === "lesson" ? (
-              <div className="mt-5">
-                <AttachmentsBlock
-                  title="수업 첨부파일"
-                  attachments={lessonAttachments}
                 />
               </div>
             ) : null}

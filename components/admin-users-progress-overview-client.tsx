@@ -170,7 +170,7 @@ function DateRangePicker({
 }
 
 export default function AdminUsersProgressOverviewClient() {
-  const [course, setCourse] = useState<"java" | "react">("java");
+  const [course, setCourse] = useState<"java" | "react" | "database">("java");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [query, setQuery] = useState("");
@@ -282,6 +282,13 @@ export default function AdminUsersProgressOverviewClient() {
               onClick={() => setCourse("react")}
             >
               React
+            </Button>
+            <Button
+              variant={course === "database" ? "secondary" : "outline"}
+              className="h-9 rounded-xl"
+              onClick={() => setCourse("database")}
+            >
+              DataBase
             </Button>
           </div>
         </div>

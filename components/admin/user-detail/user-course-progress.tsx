@@ -57,6 +57,7 @@ export default async function UserCourseProgress({
   `;
 
   // 과목별 상세(수업 리스트)
+  // ✅ total_questions는 user_quiz_progress에 없으니 quiz_questions에서 COUNT로 계산
   const lessons = await sql<LessonRow>`
     SELECT
       l.id AS lesson_id,
@@ -66,13 +67,18 @@ export default async function UserCourseProgress({
       q.title AS quiz_title,
       uqp.completed,
       uqp.best_score,
-      uqp.total_questions
+      tq.total_questions
     FROM public.posts l
     JOIN public.courses c ON c.id = l.course_id
     LEFT JOIN public.lesson_sets ls ON ls.lesson_id = l.id
     LEFT JOIN public.posts q ON q.id = ls.quiz_post_id
     LEFT JOIN public.user_quiz_progress uqp
       ON uqp.user_id = ${userId} AND uqp.post_id = ls.quiz_post_id
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::int AS total_questions
+      FROM public.quiz_questions qq
+      WHERE qq.post_id = ls.quiz_post_id
+    ) tq ON TRUE
     WHERE l.type='lesson'
     ORDER BY c.id ASC, l.id ASC
   `;
@@ -82,6 +88,7 @@ export default async function UserCourseProgress({
       <CardHeader>
         <CardTitle className="text-lg">과목별 진행 현황</CardTitle>
       </CardHeader>
+
       <CardContent className="space-y-4">
         {courses.map((c) => {
           const pct =
@@ -98,8 +105,7 @@ export default async function UserCourseProgress({
                 <Badge variant="secondary">{c.course_name}</Badge>
                 <div className="text-sm text-muted-foreground">
                   퀴즈 완료: {c.quizzes_completed}/{c.quizzes_total_linked} (
-                  {pct}
-                  %)
+                  {pct}%)
                 </div>
                 <div className="text-xs text-muted-foreground">
                   수업: {c.lessons_total} · 퀴즈 연결 수업:{" "}
@@ -108,51 +114,44 @@ export default async function UserCourseProgress({
               </summary>
 
               <div className="mt-4 grid gap-2">
-                {lessons
-                  .filter((l) => String(l).includes("") && true) // noop
-                  .filter((l) => {
-                    // course_id를 lessons에 포함하지 않았으니, title join 대신 course slug로 분리하려면 쿼리를 더 가져와야 함
-                    // 여기서는 “전체 수업 리스트”로 보여주고 싶다면 그대로 출력
-                    return true;
-                  })
-                  .map((l) => (
-                    <div
-                      key={l.lesson_id}
-                      className="rounded-lg border border-white/10 bg-black/20 p-3 flex flex-wrap items-center justify-between gap-2"
-                    >
-                      <div className="min-w-0">
-                        <div className="font-medium truncate">
-                          {l.lesson_title}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          퀴즈:{" "}
-                          {l.quiz_post_id
-                            ? l.quiz_title ?? `#${l.quiz_post_id}`
-                            : "없음"}
-                        </div>
+                {lessons.map((l) => (
+                  <div
+                    key={l.lesson_id}
+                    className="rounded-lg border border-white/10 bg-black/20 p-3 flex flex-wrap items-center justify-between gap-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">
+                        {l.lesson_title}
                       </div>
-
-                      <div className="flex items-center gap-2">
-                        {l.quiz_post_id ? (
-                          l.completed ? (
-                            <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
-                              완료
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline">미완료</Badge>
-                          )
-                        ) : (
-                          <Badge variant="secondary">퀴즈 미연결</Badge>
-                        )}
-
-                        {l.total_questions ? (
-                          <div className="text-xs text-muted-foreground">
-                            {l.best_score ?? 0}/{l.total_questions}
-                          </div>
-                        ) : null}
+                      <div className="text-xs text-muted-foreground">
+                        퀴즈:{" "}
+                        {l.quiz_post_id
+                          ? (l.quiz_title ?? `#${l.quiz_post_id}`)
+                          : "없음"}
                       </div>
                     </div>
-                  ))}
+
+                    <div className="flex items-center gap-2">
+                      {l.quiz_post_id ? (
+                        l.completed ? (
+                          <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+                            완료
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">미완료</Badge>
+                        )
+                      ) : (
+                        <Badge variant="secondary">퀴즈 미연결</Badge>
+                      )}
+
+                      {l.quiz_post_id && (l.total_questions ?? 0) > 0 ? (
+                        <div className="text-xs text-muted-foreground">
+                          {l.best_score ?? 0}/{l.total_questions}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
               </div>
             </details>
           );

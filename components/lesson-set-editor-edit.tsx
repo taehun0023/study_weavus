@@ -105,12 +105,39 @@ function apiToUiQuestion(q: ApiQuestion): QuizQuestion {
         : []
       : [];
 
+  const rawCa = String(q.correctAnswer ?? "");
+
+  // ✅ multiple_choice: 레거시(정답을 텍스트로 저장한 데이터)를 index로 보정
+  let caMc = rawCa;
+  if (q.questionType === "multiple_choice") {
+    const s = rawCa.trim();
+    const idx = Number.parseInt(s, 10);
+    const isIndex = Number.isFinite(idx) && String(idx) === s;
+    if (isIndex) {
+      caMc = s;
+    } else {
+      const optIdx = options.findIndex((o) => String(o ?? "").trim() == s);
+      caMc = optIdx >= 0 ? String(optIdx) : s;
+    }
+  }
+
+  const ca =
+    q.questionType === "true_false"
+      ? rawCa.trim().toLowerCase() === "1"
+        ? "true"
+        : rawCa.trim().toLowerCase() === "0"
+          ? "false"
+          : rawCa.trim().toLowerCase()
+      : q.questionType === "multiple_choice"
+        ? caMc
+        : rawCa;
+
   return {
     key: q.id ?? genId(),
     questionText: q.questionText ?? "",
     questionType: q.questionType ?? "multiple_choice",
     options: q.questionType === "multiple_choice" ? options : [],
-    correctAnswer: q.correctAnswer ?? "",
+    correctAnswer: ca,
     explanation: q.explanation ?? "",
   };
 }
@@ -118,30 +145,57 @@ function apiToUiQuestion(q: ApiQuestion): QuizQuestion {
 function uiToApiQuestion(q: QuizQuestion, orderIndex: number): ApiQuestion {
   const trimmedPrompt = (q.questionText ?? "").trim();
 
-  if (q.questionType === "short_answer") {
+  if (q.questionType === "multiple_choice") {
+    const opts = (q.options ?? [])
+      .map((x) => String(x ?? "").trim())
+      .filter(Boolean);
+
     return {
       questionText: trimmedPrompt,
-      questionType: "short_answer",
-      correctAnswer: (q.correctAnswer ?? "").trim(),
-      explanation: (q.explanation ?? "").trim(),
+      questionType: "multiple_choice",
+      options: opts,
+      correctAnswer: String(q.correctAnswer ?? "").trim(),
+      explanation: String(q.explanation ?? "").trim(),
       orderIndex,
     };
   }
 
-  const opts = (q.options ?? [])
-    .map((x) => String(x ?? "").trim())
-    .filter(Boolean);
-  const ca = (q.correctAnswer ?? "").trim();
+  if (q.questionType === "true_false") {
+    const raw = String(q.correctAnswer ?? "").trim().toLowerCase();
+    const normalized = raw === "1" ? "true" : raw === "0" ? "false" : raw;
 
+    return {
+      questionText: trimmedPrompt,
+      questionType: "true_false",
+      options: [],
+      correctAnswer: normalized,
+      explanation: String(q.explanation ?? "").trim(),
+      orderIndex,
+    };
+  }
+
+  if (q.questionType === "number") {
+    return {
+      questionText: trimmedPrompt,
+      questionType: "number",
+      options: [],
+      correctAnswer: String(q.correctAnswer ?? "").trim(),
+      explanation: String(q.explanation ?? "").trim(),
+      orderIndex,
+    };
+  }
+
+  // short_answer
   return {
     questionText: trimmedPrompt,
-    questionType: "multiple_choice",
-    options: opts,
-    correctAnswer: ca,
-    explanation: (q.explanation ?? "").trim(),
+    questionType: "short_answer",
+    correctAnswer: String(q.correctAnswer ?? "").trim(),
+    explanation: String(q.explanation ?? "").trim(),
     orderIndex,
   };
 }
+
+
 
 function AttachmentBox({
   title,
@@ -530,13 +584,10 @@ export default function LessonSetEditorEdit({
         if (q.key !== qid) return q;
 
         const next = [...(q.options ?? [])];
-        const prevText = next[idx] ?? "";
         next[idx] = value;
 
-        const nextCorrect =
-          q.correctAnswer === prevText ? value : q.correctAnswer;
-
-        return { ...q, options: next, correctAnswer: nextCorrect };
+        // ✅ 정답은 index 문자열로 저장되므로, 선택지 텍스트 변경과 무관
+        return { ...q, options: next };
       }),
     );
   }
@@ -555,10 +606,16 @@ export default function LessonSetEditorEdit({
         if (q.key !== qid) return q;
         if ((q.options ?? []).length <= 2) return q;
 
-        const removing = q.options[idx];
         const next = q.options.filter((_, i) => i !== idx);
 
-        const nextCorrect = q.correctAnswer === removing ? "" : q.correctAnswer;
+        const caRaw = String(q.correctAnswer ?? "").trim();
+        const caIdx = Number.parseInt(caRaw, 10);
+
+        let nextCorrect = caRaw;
+        if (Number.isFinite(caIdx) && String(caIdx) === caRaw) {
+          if (caIdx === idx) nextCorrect = "";
+          else if (caIdx > idx) nextCorrect = String(caIdx - 1);
+        }
 
         return { ...q, options: next, correctAnswer: nextCorrect };
       }),
@@ -916,7 +973,8 @@ export default function LessonSetEditorEdit({
                           <div className="space-y-2">
                             {q.options.map((c, cIdx) => {
                               const checked =
-                                q.correctAnswer !== "" && q.correctAnswer === c;
+                                q.correctAnswer !== "" &&
+                                q.correctAnswer === String(cIdx);
                               return (
                                 <div
                                   key={`${q.key}_${cIdx}`}
@@ -929,7 +987,7 @@ export default function LessonSetEditorEdit({
                                       checked={checked}
                                       onChange={() =>
                                         updateQuestion(q.key, {
-                                          correctAnswer: c,
+                                          correctAnswer: String(cIdx),
                                         })
                                       }
                                     />
@@ -961,6 +1019,55 @@ export default function LessonSetEditorEdit({
                           <div className="text-xs text-muted-foreground">
                             ※ 정답은 “선택지 번호(index)”로 저장됩니다.
                             (공백/줄바꿈 영향 없음)
+                          </div>
+                        </div>
+                      ) : q.questionType === "true_false" ? (
+                        <div className="mt-4 space-y-2">
+                          <div className="text-sm text-muted-foreground">
+                            정답(O/X)
+                          </div>
+                          <div className="flex gap-3">
+                            {[
+                              { k: "true", label: "O" },
+                              { k: "false", label: "X" },
+                            ].map((it) => (
+                              <label
+                                key={it.k}
+                                className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/10 px-4 py-2 text-sm cursor-pointer"
+                              >
+                                <input
+                                  type="radio"
+                                  name={`tf-${q.key}`}
+                                  checked={q.correctAnswer === it.k}
+                                  onChange={() =>
+                                    updateQuestion(q.key, {
+                                      correctAnswer: it.k,
+                                    })
+                                  }
+                                />
+                                <span>{it.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ) : q.questionType === "number" ? (
+                        <div className="mt-4 space-y-2">
+                          <div className="text-sm text-muted-foreground">
+                            정답(숫자)
+                          </div>
+                          <Input
+                            type="number"
+                            value={q.correctAnswer}
+                            onChange={(e) =>
+                              updateQuestion(q.key, {
+                                correctAnswer: e.target.value,
+                              })
+                            }
+                            placeholder="예: 42"
+                            className="rounded-xl bg-black/20"
+                          />
+                          <div className="text-xs text-muted-foreground">
+                            ※ 채점 시 숫자로 변환해 비교합니다. (1 과 1.0 동일)
                           </div>
                         </div>
                       ) : (

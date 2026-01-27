@@ -12,6 +12,7 @@ import * as React from "react";
  */
 
 const ALLOWED_TAGS = new Set([
+  "a",
   "p",
   "br",
   "strong",
@@ -44,6 +45,9 @@ const ALLOWED_ATTRS = new Set([
   "aria-label",
   "aria-hidden",
   "role",
+  "href",
+  "target",
+  "rel",
 ]);
 
 function sanitizeNode(node: Node) {
@@ -61,8 +65,6 @@ function sanitizeNode(node: Node) {
     if (!ALLOWED_TAGS.has(tag)) {
       const parent = el.parentNode;
       if (!parent) return;
-
-      // Replace element with its children/text
       while (el.firstChild) parent.insertBefore(el.firstChild, el);
       parent.removeChild(el);
       return;
@@ -87,6 +89,23 @@ function sanitizeNode(node: Node) {
       // basic hardening: trim huge class strings
       if (name === "class" && value.length > 500) {
         el.setAttribute("class", value.slice(0, 500));
+      }
+    }
+
+    if (tag === "a") {
+      const href = el.getAttribute("href") || "";
+      const ok =
+        href.startsWith("http://") ||
+        href.startsWith("https://") ||
+        href.startsWith("mailto:") ||
+        href.startsWith("tel:") ||
+        href.startsWith("#") ||
+        href.startsWith("/");
+
+      if (!ok) el.removeAttribute("href");
+
+      if (el.getAttribute("target") === "_blank") {
+        el.setAttribute("rel", "noopener noreferrer");
       }
     }
   }

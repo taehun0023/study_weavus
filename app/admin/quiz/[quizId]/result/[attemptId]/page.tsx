@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import HighlightOnView from "@/components/highlight-on-view";
 import { looksLikeHtmlPost as looksLikeHtml } from "@/lib/html/looksLikeHtml";
+import { parseOptions } from "@/lib/quiz/parseOptions";
 
 interface PageProps {
   params: Promise<{ quizId: string; attemptId: string }>;
@@ -33,6 +34,70 @@ function splitTitleFromHtml(html: string): { title: string; bodyHtml: string } {
 
   const bodyHtml = v.slice(m[0].length).trim();
   return { title, bodyHtml };
+}
+
+function normalizeForCompare(input: any) {
+  return String(input ?? "")
+    .replace(/\r\n/g, "\n")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+}
+
+function isChoiceType(questionType: string) {
+  const t = String(questionType ?? "").toLowerCase();
+  // 프로젝트에서 쓰는 네이밍이 다를 수 있어서 넓게 잡음
+  return (
+    t === "multiple_choice" ||
+    t === "objective" ||
+    t === "mcq" ||
+    t.includes("choice") ||
+    t.includes("multiple")
+  );
+}
+
+function isTrueFalseType(questionType: string) {
+  const t = String(questionType ?? "").toLowerCase();
+  return (
+    t === "true_false" ||
+    t === "ox" ||
+    t.includes("true") ||
+    t.includes("false")
+  );
+}
+
+function displayAnswer(
+  questionType: string,
+  raw: any,
+  optionsRaw: any,
+): string {
+  const rawStr = raw == null ? "" : String(raw);
+  if (rawStr.trim() === "") return "";
+
+  // ✅ 객관식: index 저장 → 텍스트로 변환해서 보여주기
+  if (isChoiceType(questionType)) {
+    const opts = parseOptions(optionsRaw);
+
+    // index -> 옵션 텍스트
+    const n = Number(rawStr);
+    if (opts.length > 0 && Number.isFinite(n) && n >= 0 && n < opts.length) {
+      return String(opts[n]);
+    }
+
+    // 레거시(혹시 텍스트로 저장된 값이 있으면 그대로 노출)
+    return rawStr;
+  }
+
+  // ✅ OX: 저장값이 0/1/true/false 등이어도 사람이 읽게 변환
+  if (isTrueFalseType(questionType)) {
+    const v = normalizeForCompare(rawStr);
+    if (v === "TRUE" || v === "O" || v === "1") return "O";
+    if (v === "FALSE" || v === "X" || v === "0") return "X";
+    return rawStr;
+  }
+
+  // ✅ 주관식/코딩: 그대로
+  return rawStr;
 }
 
 export default async function AdminQuizAttemptResultPage({
@@ -176,10 +241,23 @@ export default async function AdminQuizAttemptResultPage({
               ? splitTitleFromHtml(rawQ)
               : { title: rawQ, bodyHtml: "" };
 
+            const userDisplay = displayAnswer(
+              a.question_type,
+              a.user_answer,
+              a.options,
+            );
+            const correctDisplay = displayAnswer(
+              a.question_type,
+              a.correct_answer,
+              a.options,
+            );
+
             return (
               <Card
                 key={a.question_id}
-                className={`border ${a.is_correct ? "border-green-500/30" : "border-red-500/30"}`}
+                className={`border ${
+                  a.is_correct ? "border-green-500/30" : "border-red-500/30"
+                }`}
               >
                 <CardContent className="pt-6 space-y-3">
                   <div className="flex items-start justify-between gap-3">
@@ -215,13 +293,17 @@ export default async function AdminQuizAttemptResultPage({
 
                   <div className="grid gap-3 md:grid-cols-2">
                     <div
-                      className={`rounded-xl border p-3 ${a.is_correct ? "border-green-500/20 bg-green-500/5" : "border-red-500/20 bg-red-500/5"}`}
+                      className={`rounded-xl border p-3 ${
+                        a.is_correct
+                          ? "border-green-500/20 bg-green-500/5"
+                          : "border-red-500/20 bg-red-500/5"
+                      }`}
                     >
                       <div className="text-xs text-muted-foreground mb-1">
                         내 답
                       </div>
                       <div className="whitespace-pre-wrap break-words text-sm">
-                        {String(a.user_answer ?? "") || "(빈 값)"}
+                        {userDisplay || "(빈 값)"}
                       </div>
                     </div>
 
@@ -230,7 +312,7 @@ export default async function AdminQuizAttemptResultPage({
                         정답
                       </div>
                       <div className="whitespace-pre-wrap break-words text-sm">
-                        {String(a.correct_answer ?? "") || "-"}
+                        {correctDisplay || "-"}
                       </div>
                     </div>
                   </div>
