@@ -298,6 +298,109 @@ function installTablePasteNormalizer(quill: any) {
   anyRoot.__studyTablePasteHandler = handler;
 }
 
+async function uploadFileToUploads(file: File) {
+  const form = new FormData();
+  form.append("file", file);
+
+  // ✅ 프로젝트에 이미 존재하는 업로드 API 사용: app/api/upload/route.ts
+  const res = await fetch("/api/upload", {
+    method: "POST",
+    body: form,
+  });
+
+  if (!res.ok) {
+    throw new Error("upload failed");
+  }
+
+  const data = (await res.json()) as { url?: string };
+  if (!data?.url) {
+    throw new Error("invalid upload response");
+  }
+  return data.url; // e.g. "/api/upload/123"
+}
+
+function stripBase64Images(html: string) {
+  if (!html) return html;
+  // ✅ 최후 방어: data:image base64가 posts(content)에 저장되는 걸 차단
+  return html.replace(/<img[^>]+src=["']data:image\/[^"']+["'][^>]*>/gi, "");
+}
+
+/**
+ * ✅ 붙여넣기/드롭 이미지가 base64로 들어가기 전에 업로드로 전환
+ * - UI 변화 없음
+ * - 이미지는 uploads 테이블에 저장되고 <img src="/api/upload/{id}">로 삽입됨
+ */
+function installImagePasteDropUploader(quill: any) {
+  const root: HTMLElement | null = quill?.root ?? null;
+  if (!root) return;
+
+  const anyRoot = root as any;
+  if (anyRoot.__studyImagePasteDropHandler) return;
+
+  const onPaste = async (e: ClipboardEvent) => {
+    try {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      const imgItem = Array.from(items).find(
+        (it) =>
+          it.kind === "file" && String(it.type || "").startsWith("image/"),
+      );
+      if (!imgItem) return;
+
+      // ✅ base64 삽입 방지
+      e.preventDefault();
+
+      const file = imgItem.getAsFile();
+      if (!file) return;
+
+      const url = await uploadFileToUploads(file);
+
+      const range = quill.getSelection?.(true);
+      const index = range?.index ?? quill.getLength?.() ?? 0;
+
+      quill.insertEmbed(index, "image", url, "user");
+      quill.setSelection?.(index + 1, 0, "silent");
+    } catch {
+      // ignore
+    }
+  };
+
+  const onDrop = async (e: DragEvent) => {
+    try {
+      const files = e.dataTransfer?.files;
+      if (!files || files.length === 0) return;
+
+      const file = Array.from(files).find((f) =>
+        String((f as any).type || "").startsWith("image/"),
+      );
+      if (!file) return;
+
+      e.preventDefault();
+
+      const url = await uploadFileToUploads(file);
+
+      const range = quill.getSelection?.(true);
+      const index = range?.index ?? quill.getLength?.() ?? 0;
+
+      quill.insertEmbed(index, "image", url, "user");
+      quill.setSelection?.(index + 1, 0, "silent");
+    } catch {
+      // ignore
+    }
+  };
+
+  const onDragOver = (e: DragEvent) => {
+    if (e.dataTransfer?.types?.includes("Files")) e.preventDefault();
+  };
+
+  root.addEventListener("paste", onPaste as any);
+  root.addEventListener("drop", onDrop as any);
+  root.addEventListener("dragover", onDragOver as any);
+
+  anyRoot.__studyImagePasteDropHandler = { onPaste, onDrop, onDragOver };
+}
+
 type QuillEditorProps = {
   value: string;
   onChange: (v: string) => void;
@@ -381,6 +484,31 @@ export default function QuillEditor({
             quill.format("link", url);
           },
 
+          image: function () {
+            const quill = (this as any).quill;
+
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = "image/*";
+            input.click();
+
+            input.onchange = async () => {
+              const file = input.files?.[0];
+              if (!file) return;
+
+              try {
+                const url = await uploadFileToUploads(file);
+                const range = quill.getSelection?.(true);
+                const index = range?.index ?? quill.getLength?.() ?? 0;
+
+                quill.insertEmbed(index, "image", url, "user");
+                quill.setSelection?.(index + 1, 0, "silent");
+              } catch {
+                // ignore
+              }
+            };
+          },
+
           divider: function () {
             // ✅ 여기서도 한 번 더 보장 (HMR/초기 타이밍 방어)
             ensureDividerRegisteredOnce();
@@ -436,6 +564,7 @@ export default function QuillEditor({
     if (!quill) return;
     installClipboardSanitizer(quill);
     installTablePasteNormalizer(quill);
+    installImagePasteDropUploader(quill); // ✅ 추가: paste/drop 이미지 업로드로 전환
     clipboardInitRef.current = true;
   };
 
@@ -450,7 +579,8 @@ export default function QuillEditor({
         placeholder={placeholder}
         onChange={(html: string) => {
           ensureHljsOnWindowOnce();
-          const next = injectDataLanguage(html);
+          // ✅ base64 img가 어떤 이유로든 들어오면 저장 전에 제거
+          const next = injectDataLanguage(stripBase64Images(html));
           if (next === lastEmittedRef.current) return;
           lastEmittedRef.current = next;
           onChange(next);
