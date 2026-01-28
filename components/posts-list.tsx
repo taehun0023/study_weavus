@@ -1,5 +1,6 @@
 import PostCardClient from "@/components/post-card-client";
 import { sql } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
 
 type Difficulty = "easy" | "medium" | "hard" | "project" | null;
 type PostType = "lesson" | "reference" | "quiz";
@@ -81,6 +82,23 @@ export async function PostsList({
     `;
   }
 
+  // ✅ 유저가 만점 받은(합격) 수업 post_id 목록
+  const me = await getCurrentUser();
+  let passedSet = new Set<number>();
+
+  if (me) {
+    const passedRows = await sql<{ post_id: number }>`
+      SELECT DISTINCT qa.post_id
+      FROM public.quiz_attempts qa
+      JOIN public.posts p ON p.id = qa.post_id
+      WHERE qa.user_id = ${me.id}
+        AND qa.is_perfect = true
+        AND p.course_id = ${courseId}
+        AND p.type = 'lesson'
+    `;
+    passedSet = new Set(passedRows.map((r) => r.post_id));
+  }
+
   if (!rows.length) {
     return (
       <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
@@ -101,6 +119,7 @@ export async function PostsList({
           postType={r.type}
           isAdmin={isAdmin}
           returnHref={returnHref}
+          isPassed={passedSet.has(r.id)}
         />
       ))}
     </div>

@@ -17,6 +17,7 @@ export default function PostCardClient({
   postType,
   isAdmin,
   returnHref,
+  isPassed,
 }: {
   postId: number;
   title: string;
@@ -25,6 +26,7 @@ export default function PostCardClient({
   postType: PostType;
   isAdmin: boolean;
   returnHref: string;
+  isPassed: boolean;
 }) {
   const router = useRouter();
 
@@ -58,22 +60,30 @@ export default function PostCardClient({
           </div>
         </div>
 
-        {isAdmin && (
-          <div
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-          >
-            <PostAdminActions
-              postId={postId}
-              postType={postType}
-              setEditHref={`/posts/${postId}/edit-set`}
-              afterDeleteHref={returnHref}
-              size="sm"
-            />
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {isPassed && (
+            <Badge className="bg-emerald-600 text-white border border-emerald-700">
+              합격
+            </Badge>
+          )}
+
+          {isAdmin && (
+            <div
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+            >
+              <PostAdminActions
+                postId={postId}
+                postType={postType}
+                setEditHref={`/posts/${postId}/edit-set`}
+                afterDeleteHref={returnHref}
+                size="sm"
+              />
+            </div>
+          )}
+        </div>
       </div>
     </Card>
   );
