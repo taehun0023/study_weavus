@@ -73,6 +73,11 @@ export default function HeaderUserBar({
         </SelectContent>
       </Select>
 
+      {/* ✅ 전 유저 노출: 프로젝트 */}
+      <Button asChild variant="secondary" size="sm" type="button">
+        <Link href="/projects">프로젝트</Link>
+      </Button>
+
       {user.user_role === "ADMIN" && (
         <>
           <Button asChild variant="secondary" size="sm" type="button">
@@ -89,12 +94,10 @@ export default function HeaderUserBar({
         </>
       )}
 
-      {/* ✅ 이 버튼은 그대로 유지 */}
       <Button asChild variant="secondary" size="sm" type="button">
         <Link href="/interviews">면접</Link>
       </Button>
 
-      {/* ✅ 로그인 유저 아이디(표시명) 클릭 → 유저 정보 수정 */}
       <Button asChild variant="ghost" size="sm" type="button">
         <Link
           href={
