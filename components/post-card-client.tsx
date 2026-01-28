@@ -26,7 +26,7 @@ export default function PostCardClient({
   postType: PostType;
   isAdmin: boolean;
   returnHref: string;
-  isPassed: boolean;
+  isPassed: boolean; // ✅ 추가
 }) {
   const router = useRouter();
 
@@ -50,18 +50,16 @@ export default function PostCardClient({
             <Badge variant="secondary">{courseName}</Badge>
 
             {postType === "lesson" && label ? (
-              <Badge
-                // ✅ 난이도 컬러 복구
-                className={`border ${difficultyBadgeClass(label)}`}
-              >
+              <Badge className={`border ${difficultyBadgeClass(label)}`}>
                 {label}
               </Badge>
             ) : null}
           </div>
         </div>
 
+        {/* ✅ 오른쪽 영역: 합격 + (관리자면) 수정/삭제 */}
         <div className="flex items-center gap-2">
-          {isPassed && (
+          {isPassed && postType === "lesson" && (
             <Badge className="bg-emerald-600 text-white border border-emerald-700">
               합격
             </Badge>

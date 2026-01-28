@@ -50,12 +50,12 @@ export async function PostsList({
         AND p.type = 'lesson'
         AND p.difficulty = ${diffDb}
       ORDER BY
-  CASE
-    WHEN p.title ~ '^[0-9]+' THEN (substring(p.title from '^[0-9]+'))::int
-    ELSE 2147483647
-  END ASC,
-  p.title ASC,
-  p.id DESC
+        CASE
+          WHEN p.title ~ '^[0-9]+' THEN (substring(p.title from '^[0-9]+'))::int
+          ELSE 2147483647
+        END ASC,
+        p.title ASC,
+        p.id DESC
       LIMIT 200
     `;
   } else {
@@ -72,31 +72,14 @@ export async function PostsList({
       WHERE p.course_id = ${courseId}
         AND p.type = 'lesson'
       ORDER BY
-  CASE
-    WHEN p.title ~ '^[0-9]+' THEN (substring(p.title from '^[0-9]+'))::int
-    ELSE 2147483647
-  END ASC,
-  p.title ASC,
-  p.id DESC
+        CASE
+          WHEN p.title ~ '^[0-9]+' THEN (substring(p.title from '^[0-9]+'))::int
+          ELSE 2147483647
+        END ASC,
+        p.title ASC,
+        p.id DESC
       LIMIT 200
     `;
-  }
-
-  // ✅ 유저가 만점 받은(합격) 수업 post_id 목록
-  const me = await getCurrentUser();
-  let passedSet = new Set<number>();
-
-  if (me) {
-    const passedRows = await sql<{ post_id: number }>`
-      SELECT DISTINCT qa.post_id
-      FROM public.quiz_attempts qa
-      JOIN public.posts p ON p.id = qa.post_id
-      WHERE qa.user_id = ${me.id}
-        AND qa.is_perfect = true
-        AND p.course_id = ${courseId}
-        AND p.type = 'lesson'
-    `;
-    passedSet = new Set(passedRows.map((r) => r.post_id));
   }
 
   if (!rows.length) {
@@ -105,6 +88,26 @@ export async function PostsList({
         게시글이 없습니다.
       </div>
     );
+  }
+
+  // ✅ 현재 유저가 "만점(is_perfect=true)" 받은 수업(lesson)만 표시
+  //    quiz_attempts는 quiz_post_id 기준이므로 lesson_sets로 연결한다.
+  const me = await getCurrentUser();
+  const passedSet = new Set<number>();
+
+  if (me) {
+    const passed = await sql<{ lesson_id: number }>`
+      SELECT DISTINCT ls.lesson_id
+      FROM public.lesson_sets ls
+      JOIN public.quiz_attempts qa ON qa.post_id = ls.quiz_post_id
+      JOIN public.posts l ON l.id = ls.lesson_id
+      WHERE qa.user_id = ${me.id}
+        AND qa.is_perfect IS TRUE
+        AND l.course_id = ${courseId}
+        AND l.type = 'lesson'
+    `;
+
+    for (const r of passed) passedSet.add(r.lesson_id);
   }
 
   return (
@@ -119,7 +122,7 @@ export async function PostsList({
           postType={r.type}
           isAdmin={isAdmin}
           returnHref={returnHref}
-          isPassed={passedSet.has(r.id)}
+          isPassed={passedSet.has(r.id)} // ✅ 합격 표시
         />
       ))}
     </div>
