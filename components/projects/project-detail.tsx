@@ -251,7 +251,7 @@ export default function ProjectDetail({
       const title = (newFileTitle[categoryId] ?? file.name).trim() || file.name;
 
       const attachRes = await fetch(
-        `/api/project-categories/${categoryId}/files`,
+        `/api/projects/${project.id}/categories/${categoryId}/files`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
