@@ -2,12 +2,20 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { pool } from "@/lib/db";
+import { parseOptions } from "@/lib/quiz/parseOptions";
 
 export const runtime = "nodejs";
 
-type QuestionType = "multiple_choice" | "short_answer";
+// UI에서 사용하는 questionType을 모두 허용
+type QuestionType =
+  | "multiple_choice"
+  | "true_false"
+  | "number"
+  | "short_answer";
 
 type QuestionPayload = {
+  /** edit 화면에서는 기존 DB id가 넘어옴(문항 update를 위해 필요) */
+  id?: number | string;
   questionText: string;
   questionType: QuestionType;
   options?: string[];
@@ -62,6 +70,240 @@ function toIds(arr: any): number[] {
     .map((x) => Number(x))
     .filter((n) => Number.isFinite(n) && n > 0);
   return Array.from(new Set(ids));
+}
+
+// -----------------------------
+// ✅ quiz re-grade helpers
+// -----------------------------
+function isBlank(v: any): boolean {
+  return v == null || (typeof v === "string" && v.trim() === "");
+}
+
+function toFiniteInt(v: any): number | null {
+  if (v == null) return null;
+  if (typeof v === "string" && v.trim() === "") return null;
+  const n = typeof v === "number" ? v : Number(String(v));
+  return Number.isFinite(n) ? n : null;
+}
+
+function normalizeForCompare(input: any) {
+  return String(input ?? "")
+    .replace(/\r\n/g, "\n")
+    .trim();
+}
+
+function gradeAnswer(args: {
+  questionType: string;
+  optionsRaw: any;
+  correctRaw: any;
+  userAnswerRaw: any;
+  answerState?: any;
+}): boolean {
+  const opts = parseOptions(args.optionsRaw);
+  const unanswered =
+    args.answerState === "unanswered" ||
+    args.answerState === "UNANSWERED" ||
+    isBlank(args.userAnswerRaw);
+
+  if (unanswered) return false;
+
+  const userRaw = args.userAnswerRaw;
+  const userAnswerText = String(userRaw ?? "");
+  const correctRaw = String(args.correctRaw ?? "");
+
+  // multiple_choice: 기본은 index 문자열 비교. 레거시로 텍스트도 허용
+  if (args.questionType === "multiple_choice") {
+    const uIdx = toFiniteInt(userRaw);
+    const cIdx = toFiniteInt(correctRaw);
+
+    // 둘 다 index면 index 비교
+    if (uIdx != null && cIdx != null) return uIdx === cIdx;
+
+    // index vs 텍스트 혼재 방어
+    if (uIdx != null && opts.length > 0) {
+      const uText = String(opts[uIdx] ?? "");
+      return normalizeForCompare(uText) === normalizeForCompare(correctRaw);
+    }
+
+    return (
+      normalizeForCompare(userAnswerText) === normalizeForCompare(correctRaw)
+    );
+  }
+
+  // true_false: true/false, 1/0, o/x 허용
+  if (args.questionType === "true_false") {
+    const u = normalizeForCompare(userAnswerText).toLowerCase();
+    const c = normalizeForCompare(correctRaw).toLowerCase();
+    const uNorm =
+      u === "o" || u === "true" || u === "1"
+        ? "true"
+        : u === "x" || u === "false" || u === "0"
+          ? "false"
+          : u;
+    const cNorm =
+      c === "o" || c === "true" || c === "1"
+        ? "true"
+        : c === "x" || c === "false" || c === "0"
+          ? "false"
+          : c;
+    return uNorm === cNorm;
+  }
+
+  // number: 문자열 비교(공백 제거). 필요하면 향후 number tolerance 확장
+  if (args.questionType === "number") {
+    return (
+      normalizeForCompare(userAnswerText) === normalizeForCompare(correctRaw)
+    );
+  }
+
+  // short_answer: "||"로 여러 정답 허용(기존 submit 로직과 동일)
+  const candidates = String(correctRaw ?? "")
+    .split("||")
+    .map((x) => x.replace(/\r\n/g, "\n").trim());
+  const userNorm = normalizeForCompare(userAnswerText);
+  return candidates.some((c) => userNorm === normalizeForCompare(c));
+}
+
+async function regradeQuizAttempts(client: any, quizId: number) {
+  // 현재 문항
+  const questions = (
+    await client.query(
+      `
+      SELECT id, correct_answer, options, question_type
+      FROM public.quiz_questions
+      WHERE post_id=$1
+      ORDER BY order_index ASC, id ASC
+      `,
+      [quizId],
+    )
+  ).rows as {
+    id: number;
+    correct_answer: string;
+    options: any;
+    question_type: string;
+  }[];
+
+  const totalQuestions = questions.length;
+
+  const attempts = (
+    await client.query(
+      `SELECT id, user_id, created_at FROM public.quiz_attempts WHERE post_id=$1 ORDER BY created_at ASC, id ASC`,
+      [quizId],
+    )
+  ).rows as { id: number; user_id: number; created_at: string }[];
+
+  // attempt 별로 답안 upsert + 재채점
+  for (const a of attempts) {
+    const answers = (
+      await client.query(
+        `
+        SELECT id, question_id, user_answer, answer_state
+        FROM public.quiz_attempt_answers
+        WHERE attempt_id=$1
+        `,
+        [a.id],
+      )
+    ).rows as {
+      id: number;
+      question_id: number;
+      user_answer: string | null;
+      answer_state: string | null;
+    }[];
+
+    const byQ = new Map<number, (typeof answers)[number]>();
+    for (const r of answers) byQ.set(Number(r.question_id), r);
+
+    let score = 0;
+
+    for (const q of questions) {
+      const ex = byQ.get(q.id);
+
+      // ✅ 새로 추가된 문제면: 기존 attempt에 "미제출" row를 만들어 둔다
+      if (!ex) {
+        await client.query(
+          `
+          INSERT INTO public.quiz_attempt_answers
+            (attempt_id, question_id, user_answer, answer_state, is_correct)
+          VALUES
+            ($1, $2, NULL, 'unanswered', false)
+          `,
+          [a.id, q.id],
+        );
+        continue;
+      }
+
+      const isCorrect = gradeAnswer({
+        questionType: q.question_type,
+        optionsRaw: q.options,
+        correctRaw: q.correct_answer,
+        userAnswerRaw: ex.user_answer,
+        answerState: ex.answer_state,
+      });
+
+      if (isCorrect) score++;
+
+      await client.query(
+        `UPDATE public.quiz_attempt_answers SET is_correct=$1 WHERE id=$2`,
+        [isCorrect, ex.id],
+      );
+    }
+
+    const isPerfect = totalQuestions > 0 && score === totalQuestions;
+    await client.query(
+      `
+      UPDATE public.quiz_attempts
+      SET score=$1, total_questions=$2, is_perfect=$3
+      WHERE id=$4
+      `,
+      [score, totalQuestions, isPerfect, a.id],
+    );
+  }
+
+  // user_quiz_progress 재계산
+  const users = (
+    await client.query(
+      `SELECT DISTINCT user_id FROM public.quiz_attempts WHERE post_id=$1`,
+      [quizId],
+    )
+  ).rows as { user_id: number }[];
+
+  for (const u of users) {
+    const rows = (
+      await client.query(
+        `
+        SELECT score, created_at
+        FROM public.quiz_attempts
+        WHERE post_id=$1 AND user_id=$2
+        ORDER BY created_at ASC, id ASC
+        `,
+        [quizId, u.user_id],
+      )
+    ).rows as { score: number; created_at: string }[];
+
+    const attemptCount = rows.length;
+    const bestScore = rows.reduce(
+      (m, r) => Math.max(m, Number(r.score) || 0),
+      0,
+    );
+    const lastScore =
+      attemptCount > 0 ? Number(rows[attemptCount - 1].score) || 0 : 0;
+    const completed = totalQuestions > 0 && bestScore === totalQuestions;
+
+    await client.query(
+      `
+      INSERT INTO public.user_quiz_progress (user_id, post_id, best_score, last_score, completed, attempt_count, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      ON CONFLICT (user_id, post_id)
+      DO UPDATE SET
+        best_score=EXCLUDED.best_score,
+        last_score=EXCLUDED.last_score,
+        completed=EXCLUDED.completed,
+        attempt_count=EXCLUDED.attempt_count,
+        updated_at=NOW()
+      `,
+      [u.user_id, quizId, bestScore, lastScore, completed, attemptCount],
+    );
+  }
 }
 
 function pickAttachmentIds(body: Partial<BundlePutBody>) {
@@ -583,13 +825,57 @@ export async function PUT(
       await replaceAttachments(client, quizId, quizIds);
     }
 
-    // questions replace (퀴즈가 문항형으로 존재할 때만)
+    // ✅ questions upsert (문항 id 유지: 제출 기록/결과 화면 깨짐 방지)
+    // - 기존 문항: UPDATE
+    // - 새 문항: INSERT
+    // - 제거된 문항: DELETE (FK가 있으면 attempt_answers도 함께 제거되어 "삭제처리" 됨)
+    // - 저장 후: 전체 attempt를 현재 문항 기준으로 재채점/재집계
     if (quizId && hasQuiz) {
-      await client.query(`DELETE FROM public.quiz_questions WHERE post_id=$1`, [
-        quizId,
-      ]);
+      const existing = (
+        await client.query(
+          `SELECT id FROM public.quiz_questions WHERE post_id=$1`,
+          [quizId],
+        )
+      ).rows
+        .map((r: any) => Number(r.id))
+        .filter((n: any) => Number.isFinite(n));
+      const existingSet = new Set<number>(existing);
 
       const sorted = [...questions].sort((a, b) => a.orderIndex - b.orderIndex);
+
+      // payload에 포함된 "유지" id 수집
+      const keepIds = new Set<number>();
+      for (const q of sorted) {
+        const qidRaw = (q as any).id;
+        const qid =
+          typeof qidRaw === "number"
+            ? qidRaw
+            : typeof qidRaw === "string"
+              ? Number.parseInt(qidRaw, 10)
+              : NaN;
+        if (Number.isFinite(qid) && qid > 0) keepIds.add(qid);
+      }
+
+      // 제거된 문항 삭제(요청에서 빠진 기존 문항)
+      const toDelete = existing.filter((id) => !keepIds.has(id));
+      if (toDelete.length > 0) {
+        // ✅ 방어: 기존 문항이 있는데, payload에서 id가 1개도 안 오면
+        // (UI가 id를 안 보내는 버그 가능성) => 전부 삭제 사고 방지
+        if (existing.length > 0 && keepIds.size === 0 && sorted.length > 0) {
+          // 삭제하지 않고 UPDATE/INSERT만 진행하도록
+          // (이 경우 기존 문항이 남을 수 있으니, UI id 전송을 반드시 고쳐야 최종 해결)
+        } else {
+          const toDelete = existing.filter((id) => !keepIds.has(id));
+          if (toDelete.length > 0) {
+            await client.query(
+              `DELETE FROM public.quiz_questions WHERE post_id=$1 AND id = ANY($2::bigint[])`,
+              [quizId, toDelete],
+            );
+          }
+        }
+      }
+
+      // UPDATE / INSERT
       for (const q of sorted) {
         const opts =
           q.questionType === "multiple_choice"
@@ -597,9 +883,39 @@ export async function PUT(
               ? q.options.map((x) => String(x).trim()).filter(Boolean)
               : []
             : null;
-
         const optionsJson = opts === null ? null : JSON.stringify(opts);
 
+        const qidRaw = (q as any).id;
+        const qid =
+          typeof qidRaw === "number"
+            ? qidRaw
+            : typeof qidRaw === "string"
+              ? Number.parseInt(qidRaw, 10)
+              : NaN;
+
+        // 기존 문항이면 UPDATE
+        if (Number.isFinite(qid) && qid > 0 && existingSet.has(qid)) {
+          await client.query(
+            `
+            UPDATE public.quiz_questions
+            SET question_text=$1, question_type=$2, options=$3::jsonb, correct_answer=$4, explanation=$5, order_index=$6
+            WHERE id=$7 AND post_id=$8
+            `,
+            [
+              q.questionText,
+              q.questionType,
+              optionsJson,
+              q.correctAnswer,
+              (q as any).explanation ?? null,
+              q.orderIndex,
+              qid,
+              quizId,
+            ],
+          );
+          continue;
+        }
+
+        // 신규 문항이면 INSERT
         await client.query(
           `
           INSERT INTO public.quiz_questions
@@ -618,6 +934,9 @@ export async function PUT(
           ],
         );
       }
+
+      // ✅ 현재 문항 기준으로 제출/진척도 재계산(정답변경/문항추가/삭제 모두 반영)
+      await regradeQuizAttempts(client, quizId);
     }
 
     await client.query("COMMIT");

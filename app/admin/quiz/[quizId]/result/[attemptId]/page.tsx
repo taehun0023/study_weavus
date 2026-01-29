@@ -1,3 +1,4 @@
+// app/admin/quiz/[quizId]/result/[attemptId]/page.tsx
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
@@ -17,11 +18,8 @@ interface PageProps {
 
 function splitTitleFromHtml(html: string): { title: string; bodyHtml: string } {
   const v = String(html ?? "");
-
   const m = v.match(/^\s*<p[^>]*>([\s\S]*?)<\/p>/i);
-  if (!m) {
-    return { title: "", bodyHtml: v };
-  }
+  if (!m) return { title: "", bodyHtml: v };
 
   const title = m[1]
     .replace(/<[^>]+>/g, "")
@@ -46,7 +44,6 @@ function normalizeForCompare(input: any) {
 
 function isChoiceType(questionType: string) {
   const t = String(questionType ?? "").toLowerCase();
-  // 프로젝트에서 쓰는 네이밍이 다를 수 있어서 넓게 잡음
   return (
     t === "multiple_choice" ||
     t === "objective" ||
@@ -66,6 +63,55 @@ function isTrueFalseType(questionType: string) {
   );
 }
 
+/**
+ * ✅ attempt.question_order가
+ * - number[] 로 올 수도 있고
+ * - JSON string "[1,2,3]" 로 올 수도 있고
+ * - postgres array "{1,2,3}" 로 올 수도 있음
+ */
+function parseOrder(value: any): number[] {
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value.map(Number).filter((n) => Number.isFinite(n));
+  }
+
+  if (typeof value === "string") {
+    // JSON string
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.map(Number).filter((n) => Number.isFinite(n));
+      }
+    } catch {}
+
+    // postgres array string
+    if (value.startsWith("{") && value.endsWith("}")) {
+      return value
+        .slice(1, -1)
+        .split(",")
+        .map((v) => Number(v))
+        .filter((n) => Number.isFinite(n));
+    }
+  }
+
+  return [];
+}
+
+function hasMeaningfulHtml(s: any) {
+  if (typeof s !== "string") return false;
+  if (/<img\b/i.test(s)) return true;
+
+  const text = s
+    .replace(/&nbsp;/g, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return text.length > 0;
+}
+
 function displayAnswer(
   questionType: string,
   raw: any,
@@ -77,18 +123,14 @@ function displayAnswer(
   // ✅ 객관식: index 저장 → 텍스트로 변환해서 보여주기
   if (isChoiceType(questionType)) {
     const opts = parseOptions(optionsRaw);
-
-    // index -> 옵션 텍스트
     const n = Number(rawStr);
     if (opts.length > 0 && Number.isFinite(n) && n >= 0 && n < opts.length) {
       return String(opts[n]);
     }
-
-    // 레거시(혹시 텍스트로 저장된 값이 있으면 그대로 노출)
-    return rawStr;
+    return rawStr; // 레거시 텍스트
   }
 
-  // ✅ OX: 저장값이 0/1/true/false 등이어도 사람이 읽게 변환
+  // ✅ OX
   if (isTrueFalseType(questionType)) {
     const v = normalizeForCompare(rawStr);
     if (v === "TRUE" || v === "O" || v === "1") return "O";
@@ -96,7 +138,7 @@ function displayAnswer(
     return rawStr;
   }
 
-  // ✅ 주관식/코딩: 그대로
+  // ✅ 주관식/코딩
   return rawStr;
 }
 
@@ -111,7 +153,7 @@ export default async function AdminQuizAttemptResultPage({
   const { quizId, attemptId } = await params;
   const sp = (await searchParams) ?? {};
 
-  // ✅ ADMIN: 특정 유저의 attempt도 조회 가능 (user_id 제한 제거)
+  // ✅ attempt + quiz title
   const attempts = await sql<{
     id: number;
     user_id: number;
@@ -120,7 +162,7 @@ export default async function AdminQuizAttemptResultPage({
     score: number;
     total_questions: number;
     is_perfect: boolean;
-    question_order: number[];
+    question_order: any;
     created_at: Date;
     quiz_title: string;
     course_slug: string;
@@ -147,37 +189,62 @@ export default async function AdminQuizAttemptResultPage({
   const attempt = attempts[0];
   if (!attempt) notFound();
 
-  const answers = await sql<{
+  /**
+   * ✅ 핵심:
+   * "현재 퀴즈의 전체 문제"를 기준으로 출력하기 위해
+   * quiz_questions를 기준 테이블로 두고,
+   * 해당 attempt의 답안(quiz_attempt_answers)을 LEFT JOIN 한다.
+   *
+   * - 문제 추가: 답안이 없으니 NULL → (빈 값)/(미제출)로 표시됨
+   * - 문제 삭제: quiz_questions에서 빠졌으니 리스트에서 사라짐
+   */
+  const rows = await sql<{
     question_id: number;
-    user_answer: any;
-    is_correct: boolean;
     question_text: any;
     question_type: string;
     options: any;
     correct_answer: any;
     explanation: any;
+    order_index: number;
+
+    user_answer: any;
+    is_correct: boolean | null;
+    answer_id: number | null;
   }>`
     SELECT
-      qaa.question_id,
-      qaa.user_answer,
-      qaa.is_correct,
+      qq.id AS question_id,
       qq.question_text,
       qq.question_type,
       qq.options,
       qq.correct_answer,
-      qq.explanation
-    FROM quiz_attempt_answers qaa
-    JOIN quiz_questions qq ON qaa.question_id = qq.id
-    WHERE qaa.attempt_id = ${attemptId}
+      qq.explanation,
+      qq.order_index,
+
+      qaa.user_answer,
+      qaa.is_correct,
+      qaa.id AS answer_id
+    FROM quiz_questions qq
+    LEFT JOIN quiz_attempt_answers qaa
+      ON qaa.question_id = qq.id
+     AND qaa.attempt_id = ${attemptId}
+    WHERE qq.post_id = ${quizId}
+    ORDER BY qq.order_index ASC, qq.id ASC
   `;
 
-  const order = Array.isArray(attempt.question_order)
-    ? attempt.question_order
-    : [];
-  const sortedAnswers = order
-    .map((qid) => answers.find((a) => a.question_id === qid))
-    .filter(Boolean) as typeof answers;
+  // 정렬 우선순위:
+  // 1) attempt.question_order가 있으면 그 순서를 우선(과거 제출 당시 순서 유지 목적)
+  // 2) 없으면 quiz_questions.order_index 기준(현재 문제 순서)
+  const order = parseOrder(attempt.question_order);
 
+  const byId = new Map<number, (typeof rows)[number]>();
+  for (const r of rows) byId.set(r.question_id, r);
+
+  const sortedRows =
+    order.length > 0
+      ? (order.map((qid) => byId.get(qid)).filter(Boolean) as typeof rows)
+      : rows;
+
+  // 점수 % (표시는 attempt 저장값 기준)
   const scorePercent =
     attempt.total_questions > 0
       ? Math.round((attempt.score / attempt.total_questions) * 100)
@@ -216,6 +283,7 @@ export default async function AdminQuizAttemptResultPage({
                   {attempt.score} / {attempt.total_questions}
                 </div>
                 <div className="text-muted-foreground">{scorePercent}점</div>
+
                 {attempt.is_perfect ? (
                   <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
                     만점(합격)
@@ -223,6 +291,7 @@ export default async function AdminQuizAttemptResultPage({
                 ) : (
                   <Badge variant="secondary">채점 완료</Badge>
                 )}
+
                 <div className="ml-auto text-xs text-muted-foreground">
                   {new Date(attempt.created_at).toLocaleString()}
                 </div>
@@ -234,7 +303,7 @@ export default async function AdminQuizAttemptResultPage({
         <div className="space-y-4">
           <h3 className="text-lg font-semibold">문제별 결과</h3>
 
-          {sortedAnswers.map((a, idx) => {
+          {sortedRows.map((a, idx) => {
             const rawQ = String(a.question_text ?? "");
             const isHtml = looksLikeHtml(rawQ);
             const parts = isHtml
@@ -252,11 +321,18 @@ export default async function AdminQuizAttemptResultPage({
               a.options,
             );
 
+            const isSubmitted = a.answer_id != null;
+            const isCorrect = a.is_correct === true;
+
             return (
               <Card
                 key={a.question_id}
                 className={`border ${
-                  a.is_correct ? "border-green-500/30" : "border-red-500/30"
+                  !isSubmitted
+                    ? "border-white/10"
+                    : isCorrect
+                      ? "border-green-500/30"
+                      : "border-red-500/30"
                 }`}
               >
                 <CardContent className="pt-6 space-y-3">
@@ -269,7 +345,10 @@ export default async function AdminQuizAttemptResultPage({
                         {parts.title}
                       </div>
                     </div>
-                    {a.is_correct ? (
+
+                    {!isSubmitted ? (
+                      <Badge variant="secondary">미제출</Badge>
+                    ) : isCorrect ? (
                       <Badge className="bg-green-500/20 text-green-300 border-green-500/30">
                         정답
                       </Badge>
@@ -294,16 +373,18 @@ export default async function AdminQuizAttemptResultPage({
                   <div className="grid gap-3 md:grid-cols-2">
                     <div
                       className={`rounded-xl border p-3 ${
-                        a.is_correct
-                          ? "border-green-500/20 bg-green-500/5"
-                          : "border-red-500/20 bg-red-500/5"
+                        !isSubmitted
+                          ? "border-white/10 bg-white/5"
+                          : isCorrect
+                            ? "border-green-500/20 bg-green-500/5"
+                            : "border-red-500/20 bg-red-500/5"
                       }`}
                     >
                       <div className="text-xs text-muted-foreground mb-1">
                         내 답
                       </div>
                       <div className="whitespace-pre-wrap break-words text-sm">
-                        {userDisplay || "(빈 값)"}
+                        {isSubmitted ? userDisplay || "(빈 값)" : "(미제출)"}
                       </div>
                     </div>
 
@@ -317,14 +398,29 @@ export default async function AdminQuizAttemptResultPage({
                     </div>
                   </div>
 
-                  {!a.is_correct && !!a.explanation ? (
+                  {/* 해설: 오답이거나 미제출이면 보여주고 싶으면 조건 확장 */}
+                  {!isCorrect && hasMeaningfulHtml(a.explanation) ? (
                     <div className="rounded-xl border border-white/10 bg-white/5 p-3">
                       <div className="text-xs text-muted-foreground mb-1">
                         해설
                       </div>
-                      <div className="whitespace-pre-wrap break-words text-sm">
-                        {String(a.explanation)}
-                      </div>
+
+                      {looksLikeHtml(String(a.explanation)) ? (
+                        <HighlightOnView
+                          selector={`admin-attempt-exp-${a.question_id}`}
+                        >
+                          <div
+                            className={`prose prose-invert max-w-none admin-attempt-exp-${a.question_id}`}
+                            dangerouslySetInnerHTML={{
+                              __html: String(a.explanation),
+                            }}
+                          />
+                        </HighlightOnView>
+                      ) : (
+                        <div className="whitespace-pre-wrap break-words text-sm">
+                          {String(a.explanation)}
+                        </div>
+                      )}
                     </div>
                   ) : null}
                 </CardContent>
@@ -332,7 +428,7 @@ export default async function AdminQuizAttemptResultPage({
             );
           })}
 
-          {sortedAnswers.length === 0 ? (
+          {sortedRows.length === 0 ? (
             <div className="text-sm text-muted-foreground">
               결과가 없습니다.
             </div>

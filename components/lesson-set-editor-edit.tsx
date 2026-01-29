@@ -30,7 +30,7 @@ type TabKey = "lesson" | "reference" | "quiz";
 // NOTE: create/edit 화면의 문항 state를 동일하게 맞추기 위해 QuizQuestion 공용 타입 사용
 
 type ApiQuestion = {
-  id?: string;
+  id?: number;
   questionText: string;
   questionType: QuestionType;
   options?: string[];
@@ -133,7 +133,7 @@ function apiToUiQuestion(q: ApiQuestion): QuizQuestion {
         : rawCa;
 
   return {
-    key: q.id ?? genId(),
+    key: q.id != null ? String(q.id) : genId(),
     questionText: q.questionText ?? "",
     questionType: q.questionType ?? "multiple_choice",
     options: q.questionType === "multiple_choice" ? options : [],
@@ -144,6 +144,8 @@ function apiToUiQuestion(q: ApiQuestion): QuizQuestion {
 
 function uiToApiQuestion(q: QuizQuestion, orderIndex: number): ApiQuestion {
   const trimmedPrompt = (q.questionText ?? "").trim();
+  const idNum = Number(q.key);
+  const id = Number.isFinite(idNum) ? idNum : undefined;
 
   if (q.questionType === "multiple_choice") {
     const opts = (q.options ?? [])
@@ -151,6 +153,7 @@ function uiToApiQuestion(q: QuizQuestion, orderIndex: number): ApiQuestion {
       .filter(Boolean);
 
     return {
+      id,
       questionText: trimmedPrompt,
       questionType: "multiple_choice",
       options: opts,
@@ -161,10 +164,13 @@ function uiToApiQuestion(q: QuizQuestion, orderIndex: number): ApiQuestion {
   }
 
   if (q.questionType === "true_false") {
-    const raw = String(q.correctAnswer ?? "").trim().toLowerCase();
+    const raw = String(q.correctAnswer ?? "")
+      .trim()
+      .toLowerCase();
     const normalized = raw === "1" ? "true" : raw === "0" ? "false" : raw;
 
     return {
+      id,
       questionText: trimmedPrompt,
       questionType: "true_false",
       options: [],
@@ -176,6 +182,7 @@ function uiToApiQuestion(q: QuizQuestion, orderIndex: number): ApiQuestion {
 
   if (q.questionType === "number") {
     return {
+      id,
       questionText: trimmedPrompt,
       questionType: "number",
       options: [],
@@ -187,6 +194,7 @@ function uiToApiQuestion(q: QuizQuestion, orderIndex: number): ApiQuestion {
 
   // short_answer
   return {
+    id,
     questionText: trimmedPrompt,
     questionType: "short_answer",
     correctAnswer: String(q.correctAnswer ?? "").trim(),
@@ -194,8 +202,6 @@ function uiToApiQuestion(q: QuizQuestion, orderIndex: number): ApiQuestion {
     orderIndex,
   };
 }
-
-
 
 function AttachmentBox({
   title,
