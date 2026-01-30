@@ -1,6 +1,13 @@
 "use client";
 
-import { memo, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,7 +46,6 @@ async function safeJson(res: Response) {
     return { __raw: text, __status: res.status };
   }
 }
-
 
 type StopEvt = (e: any) => void;
 
@@ -163,7 +169,10 @@ const CategoryNode = memo(function CategoryNode(props: CategoryNodeProps) {
                   className="h-9 w-[280px] rounded-md border border-border bg-background px-3 text-sm outline-none"
                 />
 
-                <label className="inline-flex items-center" onPointerDownCapture={stop}>
+                <label
+                  className="inline-flex items-center"
+                  onPointerDownCapture={stop}
+                >
                   <input
                     type="file"
                     className="hidden"
@@ -184,46 +193,56 @@ const CategoryNode = memo(function CategoryNode(props: CategoryNodeProps) {
 
             <div className="space-y-2">
               {(filesMap[c.id] ?? []).length === 0 ? (
-                <div className="text-sm text-muted-foreground">파일이 없습니다.</div>
+                <div className="text-sm text-muted-foreground">
+                  파일이 없습니다.
+                </div>
               ) : (
-                (filesMap[c.id] ?? []).map((f) => (
-                  <div
-                    key={f.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-2"
-                  >
-                    <div>
-                      <div className="text-sm font-medium">{f.title}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {f.filename} · {(f.size / 1024).toFixed(0)} KB
+                (filesMap[c.id] ?? [])
+                  .sort((a, b) =>
+                    (a.title ?? "").localeCompare(b.title ?? "", undefined, {
+                      numeric: true,
+                      sensitivity: "base",
+                    }),
+                  )
+                  .map((f) => (
+                    <div
+                      key={f.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-2"
+                    >
+                      <div>
+                        <div className="text-sm font-medium">{f.title}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {f.filename} · {(f.size / 1024).toFixed(0)} KB
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="flex items-center gap-2">
-                      <Button asChild variant="secondary" size="sm" className="cursor-pointer">
-                        <a href={`/api/upload/${f.upload_id}`} target="_blank" rel="noreferrer">
-                          열기
-                        </a>
-                      </Button>
-
-                      <Button asChild variant="outline" size="sm" className="cursor-pointer">
-                        <a href={`/api/upload/${f.upload_id}?download=1`}>다운로드</a>
-                      </Button>
-
-                      {isAdmin && (
+                      <div className="flex items-center gap-2">
                         <Button
-                          variant="destructive"
+                          asChild
+                          variant="outline"
                           size="sm"
                           className="cursor-pointer"
-                          onClick={() => deleteFile(f.id, c.id)}
-                          disabled={busy}
-                          type="button"
                         >
-                          삭제
+                          <a href={`/api/upload/${f.upload_id}?download=1`}>
+                            다운로드
+                          </a>
                         </Button>
-                      )}
+
+                        {isAdmin && (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="cursor-pointer"
+                            onClick={() => deleteFile(f.id, c.id)}
+                            disabled={busy}
+                            type="button"
+                          >
+                            삭제
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))
+                  ))
               )}
             </div>
 
@@ -674,8 +693,6 @@ export default function ProjectDetail({
 
     return map;
   }, [cats]);
-
-
 
   const [openAccordions, setOpenAccordions] = useState<string[]>([]);
   const handleOpenAccordionsChange = (v: string | string[]) => {
