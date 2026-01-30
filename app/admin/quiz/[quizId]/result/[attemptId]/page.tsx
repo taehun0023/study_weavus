@@ -190,13 +190,10 @@ export default async function AdminQuizAttemptResultPage({
   if (!attempt) notFound();
 
   /**
-   * ✅ 핵심:
-   * "현재 퀴즈의 전체 문제"를 기준으로 출력하기 위해
-   * quiz_questions를 기준 테이블로 두고,
-   * 해당 attempt의 답안(quiz_attempt_answers)을 LEFT JOIN 한다.
-   *
-   * - 문제 추가: 답안이 없으니 NULL → (빈 값)/(미제출)로 표시됨
-   * - 문제 삭제: quiz_questions에서 빠졌으니 리스트에서 사라짐
+   * ✅ B안 기준:
+   * - "현재 활성 문제(is_deleted=false)"만 출력 대상
+   * - quiz_questions를 기준으로 하고,
+   * - attempt 답안을 LEFT JOIN하여 (미제출)도 표시
    */
   const rows = await sql<{
     question_id: number;
@@ -228,23 +225,33 @@ export default async function AdminQuizAttemptResultPage({
       ON qaa.question_id = qq.id
      AND qaa.attempt_id = ${attemptId}
     WHERE qq.post_id = ${quizId}
+      AND qq.is_deleted = FALSE
     ORDER BY qq.order_index ASC, qq.id ASC
   `;
 
   // 정렬 우선순위:
-  // 1) attempt.question_order가 있으면 그 순서를 우선(과거 제출 당시 순서 유지 목적)
-  // 2) 없으면 quiz_questions.order_index 기준(현재 문제 순서)
+  // 1) attempt.question_order가 있으면 그 순서를 최대한 반영
+  // 2) 매칭이 일부/0개면 rows(현재 문제 순서)로 fallback
   const order = parseOrder(attempt.question_order);
 
   const byId = new Map<number, (typeof rows)[number]>();
   for (const r of rows) byId.set(r.question_id, r);
 
+  const orderSet = new Set(order);
+  const ordered = order
+    .map((qid) => byId.get(qid))
+    .filter(Boolean) as typeof rows;
+
+  const remainder = rows.filter((r) => !orderSet.has(r.question_id));
+
   const sortedRows =
     order.length > 0
-      ? (order.map((qid) => byId.get(qid)).filter(Boolean) as typeof rows)
+      ? ordered.length > 0
+        ? [...ordered, ...remainder]
+        : rows
       : rows;
 
-  // 점수 % (표시는 attempt 저장값 기준)
+  // 점수 % (표시는 attempt 저장값 기준: B안에서는 "재채점 후" 최신 값이어야 함)
   const scorePercent =
     attempt.total_questions > 0
       ? Math.round((attempt.score / attempt.total_questions) * 100)
@@ -398,7 +405,6 @@ export default async function AdminQuizAttemptResultPage({
                     </div>
                   </div>
 
-                  {/* 해설: 오답이거나 미제출이면 보여주고 싶으면 조건 확장 */}
                   {!isCorrect && hasMeaningfulHtml(a.explanation) ? (
                     <div className="rounded-xl border border-white/10 bg-white/5 p-3">
                       <div className="text-xs text-muted-foreground mb-1">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +11,12 @@ import {
 } from "@/components/ui/accordion";
 
 type Project = { id: number; name: string; slug: string; course_id: number };
-type Category = { id: number; name: string; order_index: number };
+type Category = {
+  id: number;
+  name: string;
+  order_index: number;
+  parent_id: number | null;
+};
 type FileItem = {
   id: number;
   title: string;
@@ -35,6 +40,262 @@ async function safeJson(res: Response) {
   }
 }
 
+
+type StopEvt = (e: any) => void;
+
+type CategoryNodeProps = {
+  c: Category;
+  depth: number;
+  tree: Map<number | null, Category[]>;
+  isAdmin: boolean;
+  busy: boolean;
+
+  filesMap: Record<number, FileItem[]>;
+  newFileTitle: Record<number, string>;
+  setNewFileTitle: Dispatch<SetStateAction<Record<number, string>>>;
+  subCatName: Record<number, string>;
+  setSubCatName: Dispatch<SetStateAction<Record<number, string>>>;
+
+  refreshFiles: (categoryId: number) => Promise<void>;
+  uploadAndAttach: (categoryId: number, file: File) => Promise<void>;
+  deleteFile: (fileId: number, categoryId: number) => Promise<void>;
+
+  renameCategory: (categoryId: number) => Promise<void>;
+  deleteCategory: (categoryId: number) => Promise<void>;
+  createSubCategory: (parentId: number) => Promise<void>;
+
+  stop: StopEvt;
+};
+
+const CategoryNode = memo(function CategoryNode(props: CategoryNodeProps) {
+  const {
+    c,
+    depth,
+    tree,
+    isAdmin,
+    busy,
+    filesMap,
+    newFileTitle,
+    setNewFileTitle,
+    subCatName,
+    setSubCatName,
+    refreshFiles,
+    uploadAndAttach,
+    deleteFile,
+    renameCategory,
+    deleteCategory,
+    createSubCategory,
+    stop,
+  } = props;
+
+  const children = tree.get(c.id) ?? [];
+  const indent = Math.min(depth, 6) * 12;
+
+  // ✅ 각 노드의 "자식 토글" 상태를 노드 내부에서 유지 (cats refresh해도 닫히지 않게)
+  const [openChildren, setOpenChildren] = useState<string[]>([]);
+  const handleOpenChildrenChange = (v: string | string[]) => {
+    const arr = Array.isArray(v) ? v : v ? [v] : [];
+    setOpenChildren(arr);
+  };
+
+  return (
+    <div style={{ marginLeft: indent }}>
+      <AccordionItem
+        value={`cat-${c.id}`}
+        className="rounded-xl border border-border bg-card px-3"
+      >
+        <div className="flex items-center justify-between gap-2 py-1">
+          <AccordionTrigger
+            className="flex w-full items-center justify-start text-left cursor-pointer [&>svg:last-child]:hidden py-1"
+            onClick={() => {
+              refreshFiles(c.id).catch(() => {});
+            }}
+          >
+            <div className="font-semibold leading-tight">{c.name}</div>
+          </AccordionTrigger>
+
+          {isAdmin && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="cursor-pointer"
+                onClick={() => renameCategory(c.id)}
+                disabled={busy}
+                type="button"
+              >
+                수정
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="cursor-pointer"
+                onClick={() => deleteCategory(c.id)}
+                disabled={busy}
+                type="button"
+              >
+                삭제
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <AccordionContent>
+          {/*
+            ⚠️ 중요: 여기에서 onClickCapture / onPointerDownCapture 를 전체에 걸어버리면
+            React의 synthetic event 전파가 끊기면서 버튼(onClick)이 안 먹는 케이스가 생길 수 있음.
+
+            포커스 튐은 "타이핑(keydown)"이 Trigger까지 올라가 Radix typeahead로 처리되는 게 주 원인이라
+            keydown만 차단하고, pointer 이벤트는 입력 요소(input/file)에서만 막는다.
+          */}
+          <div className="space-y-3 pb-3" onKeyDownCapture={stop}>
+            {isAdmin && (
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  value={newFileTitle[c.id] ?? ""}
+                  onChange={(e) =>
+                    setNewFileTitle((p) => ({
+                      ...p,
+                      [c.id]: e.target.value,
+                    }))
+                  }
+                  placeholder="파일 제목 (예: 요건정의서 v1)"
+                  className="h-9 w-[280px] rounded-md border border-border bg-background px-3 text-sm outline-none"
+                />
+
+                <label className="inline-flex items-center" onPointerDownCapture={stop}>
+                  <input
+                    type="file"
+                    className="hidden"
+                    onPointerDownCapture={stop}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (!f) return;
+                      uploadAndAttach(c.id, f).catch(() => {});
+                      e.currentTarget.value = "";
+                    }}
+                  />
+                  <span className="inline-flex h-9 items-center rounded-md border border-border bg-secondary px-3 text-sm cursor-pointer">
+                    파일 추가
+                  </span>
+                </label>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {(filesMap[c.id] ?? []).length === 0 ? (
+                <div className="text-sm text-muted-foreground">파일이 없습니다.</div>
+              ) : (
+                (filesMap[c.id] ?? []).map((f) => (
+                  <div
+                    key={f.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-2"
+                  >
+                    <div>
+                      <div className="text-sm font-medium">{f.title}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {f.filename} · {(f.size / 1024).toFixed(0)} KB
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button asChild variant="secondary" size="sm" className="cursor-pointer">
+                        <a href={`/api/upload/${f.upload_id}`} target="_blank" rel="noreferrer">
+                          열기
+                        </a>
+                      </Button>
+
+                      <Button asChild variant="outline" size="sm" className="cursor-pointer">
+                        <a href={`/api/upload/${f.upload_id}?download=1`}>다운로드</a>
+                      </Button>
+
+                      {isAdmin && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="cursor-pointer"
+                          onClick={() => deleteFile(f.id, c.id)}
+                          disabled={busy}
+                          type="button"
+                        >
+                          삭제
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {isAdmin && (
+              <div className="pt-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    value={subCatName[c.id] ?? ""}
+                    onChange={(e) =>
+                      setSubCatName((p) => ({
+                        ...p,
+                        [c.id]: e.target.value,
+                      }))
+                    }
+                    placeholder="서브 카테고리 추가"
+                    className="h-9 w-[280px] rounded-md border border-border bg-background px-3 text-sm outline-none"
+                  />
+
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => createSubCategory(c.id)}
+                    disabled={busy}
+                    className="cursor-pointer"
+                    type="button"
+                  >
+                    서브 카테고리 추가
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {children.length > 0 && (
+              <div className="pt-2">
+                <Accordion
+                  type="multiple"
+                  className="space-y-2"
+                  value={openChildren}
+                  onValueChange={handleOpenChildrenChange}
+                >
+                  {children.map((ch) => (
+                    <CategoryNode
+                      key={ch.id}
+                      c={ch}
+                      depth={depth + 1}
+                      tree={tree}
+                      isAdmin={isAdmin}
+                      busy={busy}
+                      filesMap={filesMap}
+                      newFileTitle={newFileTitle}
+                      setNewFileTitle={setNewFileTitle}
+                      subCatName={subCatName}
+                      setSubCatName={setSubCatName}
+                      refreshFiles={refreshFiles}
+                      uploadAndAttach={uploadAndAttach}
+                      deleteFile={deleteFile}
+                      renameCategory={renameCategory}
+                      deleteCategory={deleteCategory}
+                      createSubCategory={createSubCategory}
+                      stop={stop}
+                    />
+                  ))}
+                </Accordion>
+              </div>
+            )}
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    </div>
+  );
+});
+
 export default function ProjectDetail({
   project,
   isAdmin,
@@ -49,6 +310,7 @@ export default function ProjectDetail({
   const [loading, setLoading] = useState(true);
 
   const [newCat, setNewCat] = useState("");
+  const [subCatName, setSubCatName] = useState<Record<number, string>>({});
   const [newFileTitle, setNewFileTitle] = useState<Record<number, string>>({});
 
   const [editName, setEditName] = useState(project.name);
@@ -56,6 +318,12 @@ export default function ProjectDetail({
 
   const [errorMsg, setErrorMsg] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // ✅ FIX: Accordion typeahead(문자 검색)로 포커스가 트리거로 튀는 문제 방지
+  // input에서 keydown/click이 Accordion까지 버블링되면, Radix가 "typeahead"로 받아 포커스를 빼앗음
+  const stop = (e: any) => {
+    e.stopPropagation();
+  };
 
   async function loadCategories() {
     const r = await fetch(`/api/projects/${project.id}/categories`, {
@@ -65,6 +333,10 @@ export default function ProjectDetail({
     if (!r.ok)
       throw new Error(j?.message || `카테고리 로드 실패 (HTTP ${r.status})`);
     setCats((j?.items ?? []) as Category[]);
+  }
+
+  async function refreshCategories() {
+    await loadCategories();
   }
 
   useEffect(() => {
@@ -100,7 +372,7 @@ export default function ProjectDetail({
     }));
   }
 
-  async function createCategory() {
+  async function createCategoryRoot() {
     const name = newCat.trim();
     if (!name) return;
 
@@ -110,19 +382,44 @@ export default function ProjectDetail({
     const res = await fetch(`/api/projects/${project.id}/categories`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, parentId: null }),
     });
-    const j: any = await safeJson(res);
 
+    const j: any = await safeJson(res);
     setBusy(false);
 
     if (!res.ok) {
-      setErrorMsg(j?.message || `카테고리 추가 실패 (HTTP ${res.status})`);
+      setErrorMsg(j?.message || `카테고리 생성 실패 (HTTP ${res.status})`);
       return;
     }
 
     setNewCat("");
-    await loadCategories();
+    await refreshCategories();
+  }
+
+  async function createSubCategory(parentId: number) {
+    const name = (subCatName[parentId] ?? "").trim();
+    if (!name) return;
+
+    setBusy(true);
+    setErrorMsg("");
+
+    const res = await fetch(`/api/projects/${project.id}/categories`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, parentId }),
+    });
+
+    const j: any = await safeJson(res);
+    setBusy(false);
+
+    if (!res.ok) {
+      setErrorMsg(j?.message || `서브 카테고리 생성 실패 (HTTP ${res.status})`);
+      return;
+    }
+
+    setSubCatName((p) => ({ ...p, [parentId]: "" }));
+    await refreshCategories();
   }
 
   async function renameCategory(categoryId: number) {
@@ -155,13 +452,13 @@ export default function ProjectDetail({
       return;
     }
 
-    await loadCategories();
+    await refreshCategories();
   }
 
   async function deleteCategory(categoryId: number) {
     if (
       !window.confirm(
-        "카테고리를 삭제할까요? (안의 파일 목록도 같이 삭제됩니다)",
+        "카테고리를 삭제할까요? (서브카테고리/안의 파일 목록도 같이 삭제될 수 있습니다)",
       )
     )
       return;
@@ -184,14 +481,13 @@ export default function ProjectDetail({
       return;
     }
 
-    // local state 정리
     setFilesMap((p) => {
       const next = { ...p };
       delete next[categoryId];
       return next;
     });
 
-    await loadCategories();
+    await refreshCategories();
   }
 
   async function uploadAndAttach(categoryId: number, file: File) {
@@ -199,7 +495,6 @@ export default function ProjectDetail({
     setErrorMsg("");
 
     try {
-      // ✅ 1) 현재 파일 목록을 서버에서 최신으로 가져와서 중복 체크
       const listRes = await fetch(
         `/api/projects/${project.id}/categories/${categoryId}/files`,
         { cache: "no-store" },
@@ -227,7 +522,6 @@ export default function ProjectDetail({
         existingFileId = dup.id;
       }
 
-      // ✅ 2) uploads 테이블로 업로드 (기존 /api/upload 재사용)
       const form = new FormData();
       form.append("file", file);
 
@@ -236,7 +530,6 @@ export default function ProjectDetail({
       if (!upRes.ok)
         throw new Error(upJ?.message || `업로드 실패 (HTTP ${upRes.status})`);
 
-      // ✅ uploadId 파싱: {id} 우선, 없으면 {url:'/api/upload/123'}에서 숫자 추출
       let uploadId = Number(upJ?.id ?? NaN);
       if (!Number.isFinite(uploadId)) {
         const url = String(upJ?.url ?? "");
@@ -247,7 +540,6 @@ export default function ProjectDetail({
         throw new Error("업로드 응답에 id/url이 없습니다.");
       }
 
-      // ✅ 3) project_files 등록(또는 덮어쓰기)
       const title = (newFileTitle[categoryId] ?? file.name).trim() || file.name;
 
       const attachRes = await fetch(
@@ -260,7 +552,7 @@ export default function ProjectDetail({
             uploadId,
             overwrite,
             existingFileId,
-            filename: file.name, // (보조용)
+            filename: file.name,
           }),
         },
       );
@@ -360,16 +652,41 @@ export default function ProjectDetail({
     router.push("/projects");
   }
 
-  const orderedCats = useMemo(() => {
-    return [...cats].sort(
-      (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0),
-    );
+  const tree = useMemo(() => {
+    const map = new Map<number | null, Category[]>();
+    for (const c of cats) {
+      const key = c.parent_id ?? null;
+      const arr = map.get(key) ?? [];
+      arr.push(c);
+      map.set(key, arr);
+    }
+
+    for (const [k, arr] of map.entries()) {
+      arr.sort((a, b) => {
+        const oi = (a.order_index ?? 0) - (b.order_index ?? 0);
+        if (oi !== 0) return oi;
+        const nn = a.name.localeCompare(b.name);
+        if (nn !== 0) return nn;
+        return a.id - b.id;
+      });
+      map.set(k, arr);
+    }
+
+    return map;
   }, [cats]);
+
+
+
+  const [openAccordions, setOpenAccordions] = useState<string[]>([]);
+  const handleOpenAccordionsChange = (v: string | string[]) => {
+    const arr = Array.isArray(v) ? v : v ? [v] : [];
+    setOpenAccordions(arr);
+  };
+  const rootCats = tree.get(null) ?? [];
 
   return (
     <div className="space-y-6">
       <div className="rounded-xl border border-border bg-card p-5">
-        {/* 프로젝트 제목 영역 */}
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="text-xl font-bold">{project.name}</div>
@@ -432,7 +749,7 @@ export default function ProjectDetail({
             <Button
               variant="secondary"
               size="sm"
-              onClick={createCategory}
+              onClick={createCategoryRoot}
               disabled={busy}
               className="cursor-pointer"
               type="button"
@@ -453,157 +770,40 @@ export default function ProjectDetail({
         <div className="text-sm text-muted-foreground">불러오는 중...</div>
       )}
 
-      {!loading && orderedCats.length === 0 && (
+      {!loading && rootCats.length === 0 && (
         <div className="text-sm text-muted-foreground">
           카테고리가 없습니다. (예: 요건정의서 / 기본설계서 / 상세설계서 /
           화면정의안)
         </div>
       )}
 
-      <Accordion type="multiple" className="space-y-2">
-        {orderedCats.map((c) => (
-          <AccordionItem
+      <Accordion
+        type="multiple"
+        className="space-y-2"
+        value={openAccordions}
+        onValueChange={handleOpenAccordionsChange}
+      >
+        {rootCats.map((c) => (
+          <CategoryNode
             key={c.id}
-            value={`cat-${c.id}`}
-            className="rounded-xl border border-border bg-card px-3"
-          >
-            {/* ✅ header row: 왼쪽은 trigger(button), 오른쪽은 action 버튼들(버튼 밖) */}
-            <div className="flex items-center justify-between gap-2 py-1">
-              <AccordionTrigger
-                className="flex w-full items-center justify-start text-left cursor-pointer
-               [&>svg:last-child]:hidden py-1"
-                onClick={() => {
-                  refreshFiles(c.id).catch(() => {});
-                }}
-              >
-                <div className="font-semibold leading-tight">{c.name}</div>
-              </AccordionTrigger>
-
-              {isAdmin && (
-                <div className="flex items-center gap-2">
-                  {/* ✅ 여기 버튼들은 trigger 밖이라 button 중첩 없음 */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="cursor-pointer"
-                    onClick={() => renameCategory(c.id)}
-                    disabled={busy}
-                    type="button"
-                  >
-                    수정
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="cursor-pointer"
-                    onClick={() => deleteCategory(c.id)}
-                    disabled={busy}
-                    type="button"
-                  >
-                    삭제
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            <AccordionContent>
-              <div className="space-y-3 pb-3">
-                {isAdmin && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <input
-                      value={newFileTitle[c.id] ?? ""}
-                      onChange={(e) =>
-                        setNewFileTitle((p) => ({
-                          ...p,
-                          [c.id]: e.target.value,
-                        }))
-                      }
-                      placeholder="파일 제목 (예: 요건정의서 v1)"
-                      className="h-9 w-[280px] rounded-md border border-border bg-background px-3 text-sm outline-none"
-                    />
-
-                    <label className="inline-flex items-center">
-                      <input
-                        type="file"
-                        className="hidden"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (!f) return;
-                          uploadAndAttach(c.id, f).catch(() => {});
-                          e.currentTarget.value = "";
-                        }}
-                      />
-                      <span className="inline-flex h-9 items-center rounded-md border border-border bg-secondary px-3 text-sm cursor-pointer">
-                        파일 추가
-                      </span>
-                    </label>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  {(filesMap[c.id] ?? []).length === 0 ? (
-                    <div className="text-sm text-muted-foreground">
-                      파일이 없습니다.
-                    </div>
-                  ) : (
-                    (filesMap[c.id] ?? []).map((f) => (
-                      <div
-                        key={f.id}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-2"
-                      >
-                        <div className="min-w-0">
-                          <div className="font-medium truncate">{f.title}</div>
-                          <div className="text-xs text-muted-foreground truncate">
-                            {f.filename} · {Math.round((f.size ?? 0) / 1024)} KB
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <Button
-                            asChild
-                            variant="secondary"
-                            size="sm"
-                            className="cursor-pointer"
-                          >
-                            <a
-                              href={`/api/upload/${f.upload_id}`}
-                              target="_blank"
-                            >
-                              열기
-                            </a>
-                          </Button>
-
-                          <Button
-                            asChild
-                            variant="outline"
-                            size="sm"
-                            className="cursor-pointer"
-                          >
-                            <a href={`/api/upload/${f.upload_id}?download=1`}>
-                              다운로드
-                            </a>
-                          </Button>
-
-                          {isAdmin && (
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              className="cursor-pointer"
-                              onClick={() => deleteFile(f.id, c.id)}
-                              disabled={busy}
-                              type="button"
-                            >
-                              삭제
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
+            c={c}
+            depth={0}
+            tree={tree}
+            isAdmin={isAdmin}
+            busy={busy}
+            filesMap={filesMap}
+            newFileTitle={newFileTitle}
+            setNewFileTitle={setNewFileTitle}
+            subCatName={subCatName}
+            setSubCatName={setSubCatName}
+            refreshFiles={refreshFiles}
+            uploadAndAttach={uploadAndAttach}
+            deleteFile={deleteFile}
+            renameCategory={renameCategory}
+            deleteCategory={deleteCategory}
+            createSubCategory={createSubCategory}
+            stop={stop}
+          />
         ))}
       </Accordion>
     </div>

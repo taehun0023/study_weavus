@@ -165,13 +165,14 @@ function gradeAnswer(args: {
 }
 
 async function regradeQuizAttempts(client: any, quizId: number) {
-  // 현재 문항
+  // 현재 문항 (✅ 삭제된 문항 제외)
   const questions = (
     await client.query(
       `
       SELECT id, correct_answer, options, question_type
       FROM public.quiz_questions
       WHERE post_id=$1
+        AND is_deleted = FALSE
       ORDER BY order_index ASC, id ASC
       `,
       [quizId],
@@ -462,11 +463,12 @@ export async function GET(
       ? (
           await client.query(
             `
-            SELECT id, question_text, question_type, options, correct_answer, explanation, order_index
-            FROM public.quiz_questions
-            WHERE post_id = $1
-            ORDER BY order_index ASC
-            `,
+        SELECT id, question_text, question_type, options, correct_answer, explanation, order_index
+        FROM public.quiz_questions
+        WHERE post_id = $1
+          AND is_deleted = FALSE
+        ORDER BY order_index ASC
+        `,
             [quizId],
           )
         ).rows.map((r: any) => ({
@@ -825,10 +827,11 @@ export async function PUT(
       await replaceAttachments(client, quizId, quizIds);
     }
 
-    // ✅ questions upsert (문항 id 유지: 제출 기록/결과 화면 깨짐 방지)
-    // - 기존 문항: UPDATE
-    // - 새 문항: INSERT
-    // - 제거된 문항: DELETE (FK가 있으면 attempt_answers도 함께 제거되어 "삭제처리" 됨)
+    // ✅ questions upsert (B안: "항상 최신 기준 재채점")
+    // - 문항 id는 절대 바꾸지 않는다(DELETE+INSERT 금지)
+    // - 삭제는 soft delete(is_deleted=true)
+    // - 기존 문항: UPDATE (is_deleted=false로 복구 포함)
+    // - 새 문항: INSERT (is_deleted=false)
     // - 저장 후: 전체 attempt를 현재 문항 기준으로 재채점/재집계
     if (quizId && hasQuiz) {
       const existing = (
@@ -856,22 +859,20 @@ export async function PUT(
         if (Number.isFinite(qid) && qid > 0) keepIds.add(qid);
       }
 
-      // 제거된 문항 삭제(요청에서 빠진 기존 문항)
+      // ✅ 제거된 문항은 soft delete
       const toDelete = existing.filter((id) => !keepIds.has(id));
       if (toDelete.length > 0) {
-        // ✅ 방어: 기존 문항이 있는데, payload에서 id가 1개도 안 오면
-        // (UI가 id를 안 보내는 버그 가능성) => 전부 삭제 사고 방지
+        // ✅ 방어: 기존 문항이 있는데 payload에서 id가 1개도 안 오면(프론트 버그)
+        // 전부 삭제 사고 방지 → soft delete도 하지 않음
         if (existing.length > 0 && keepIds.size === 0 && sorted.length > 0) {
-          // 삭제하지 않고 UPDATE/INSERT만 진행하도록
-          // (이 경우 기존 문항이 남을 수 있으니, UI id 전송을 반드시 고쳐야 최종 해결)
+          // noop
         } else {
-          const toDelete = existing.filter((id) => !keepIds.has(id));
-          if (toDelete.length > 0) {
-            await client.query(
-              `DELETE FROM public.quiz_questions WHERE post_id=$1 AND id = ANY($2::bigint[])`,
-              [quizId, toDelete],
-            );
-          }
+          await client.query(
+            `UPDATE public.quiz_questions
+         SET is_deleted = TRUE
+         WHERE post_id=$1 AND id = ANY($2::bigint[])`,
+            [quizId, toDelete],
+          );
         }
       }
 
@@ -893,14 +894,15 @@ export async function PUT(
               ? Number.parseInt(qidRaw, 10)
               : NaN;
 
-        // 기존 문항이면 UPDATE
+        // 기존 문항이면 UPDATE (삭제됐던 문항도 되살림: is_deleted=FALSE)
         if (Number.isFinite(qid) && qid > 0 && existingSet.has(qid)) {
           await client.query(
             `
-            UPDATE public.quiz_questions
-            SET question_text=$1, question_type=$2, options=$3::jsonb, correct_answer=$4, explanation=$5, order_index=$6
-            WHERE id=$7 AND post_id=$8
-            `,
+        UPDATE public.quiz_questions
+        SET question_text=$1, question_type=$2, options=$3::jsonb, correct_answer=$4, explanation=$5, order_index=$6,
+            is_deleted=FALSE
+        WHERE id=$7 AND post_id=$8
+        `,
             [
               q.questionText,
               q.questionType,
@@ -918,11 +920,11 @@ export async function PUT(
         // 신규 문항이면 INSERT
         await client.query(
           `
-          INSERT INTO public.quiz_questions
-            (post_id, question_text, question_type, options, correct_answer, explanation, order_index)
-          VALUES
-            ($1, $2, $3, $4::jsonb, $5, $6, $7)
-          `,
+      INSERT INTO public.quiz_questions
+        (post_id, question_text, question_type, options, correct_answer, explanation, order_index, is_deleted)
+      VALUES
+        ($1, $2, $3, $4::jsonb, $5, $6, $7, FALSE)
+      `,
           [
             quizId,
             q.questionText,

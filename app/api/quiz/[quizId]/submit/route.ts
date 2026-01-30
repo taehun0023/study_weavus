@@ -43,6 +43,7 @@ export async function POST(
     const { quizId } = await params;
     const body = (await request.json().catch(() => ({}))) as Body;
 
+    // ✅ B안 필수: soft delete 된 문제는 채점/제출에 포함되면 안 됨
     const questions = await sql<{
       id: number;
       correct_answer: string;
@@ -52,6 +53,7 @@ export async function POST(
       SELECT id, correct_answer, options, question_type
       FROM quiz_questions
       WHERE post_id = ${quizId}
+        AND is_deleted = FALSE
       ORDER BY order_index ASC, id ASC
     `;
 
@@ -126,7 +128,6 @@ export async function POST(
           : -1;
 
       // ✅ 가장 중요: 미작성은 무조건 오답
-
       const isCorrect = (() => {
         if (unanswered) return false;
 

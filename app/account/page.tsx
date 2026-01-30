@@ -15,7 +15,7 @@ export default async function AccountPage() {
           <div>
             <h1 className="text-2xl font-bold">내 계정</h1>
             <p className="text-muted-foreground text-sm mt-1">
-              아이디/표시 이름을 수정할 수 있습니다.
+              아이디/표시 이름/비밀번호를 수정할 수 있습니다.
             </p>
           </div>
 

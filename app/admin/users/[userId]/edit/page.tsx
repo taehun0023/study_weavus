@@ -67,7 +67,7 @@ export default async function AdminUserEditPage({
           <div>
             <h1 className="text-2xl font-bold">유저 수정</h1>
             <p className="text-muted-foreground text-sm mt-1">
-              아이디/표시 이름 변경 가능
+              아이디/표시 이름/비밀번호 변경 가능
             </p>
           </div>
 

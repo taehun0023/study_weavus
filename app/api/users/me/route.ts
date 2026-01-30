@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, hashPassword, verifyPassword } from "@/lib/auth";
 import { sql } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -13,6 +13,10 @@ function normalizeDisplayName(v: any) {
   return String(v ?? "").trim();
 }
 
+function normalizePassword(v: any) {
+  return String(v ?? "");
+}
+
 export async function PATCH(req: NextRequest) {
   try {
     const me = await getCurrentUser();
@@ -23,6 +27,8 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const username = normalizeUsername(body?.username);
     const displayName = normalizeDisplayName(body?.displayName);
+    const password = normalizePassword(body?.password);
+    const currentPassword = normalizePassword(body?.currentPassword);
 
     if (!username) {
       return NextResponse.json(
@@ -51,6 +57,42 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
+    let nextHash: string | null = null;
+    if (password) {
+      if (password.length < 4 || password.length > 72) {
+        return NextResponse.json(
+          { error: "비밀번호는 4~72자여야 합니다." },
+          { status: 400 },
+        );
+      }
+      if (!currentPassword) {
+        return NextResponse.json(
+          { error: "현재 비밀번호를 입력해주세요." },
+          { status: 400 },
+        );
+      }
+
+      const rows = await sql<{ password_hash: string }>`
+        SELECT password_hash
+        FROM public.users
+        WHERE id = ${me.id}
+        LIMIT 1
+      `;
+      const stored = rows[0]?.password_hash;
+      if (!stored) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      const ok = await verifyPassword(currentPassword, stored);
+      if (!ok) {
+        return NextResponse.json(
+          { error: "현재 비밀번호가 올바르지 않습니다." },
+          { status: 400 },
+        );
+      }
+
+      nextHash = await hashPassword(password);
+    }
+
     const rows = await sql<{
       id: number;
       username: string;
@@ -58,7 +100,8 @@ export async function PATCH(req: NextRequest) {
     }>`
       UPDATE public.users
       SET username = ${username},
-          display_name = ${displayName || me.display_name}
+          display_name = ${displayName || me.display_name},
+          password_hash = COALESCE(${nextHash}, password_hash)
       WHERE id = ${me.id}
       RETURNING id, username, display_name
     `;

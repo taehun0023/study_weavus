@@ -19,6 +19,11 @@ export default function AdminUserEditForm({
   const router = useRouter();
   const [username, setUsername] = useState(initialUsername ?? "");
   const [displayName, setDisplayName] = useState(initialDisplayName ?? "");
+
+  // ✅ 추가: 비밀번호 변경(선택)
+  const [newPassword, setNewPassword] = useState("");
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -35,12 +40,31 @@ export default function AdminUserEditForm({
       return;
     }
 
+    // ✅ 추가: 비밀번호 확인
+    const p = newPassword;
+    const pc = newPasswordConfirm;
+
+    if (p || pc) {
+      if (p.length < 4 || p.length > 72) {
+        setError("비밀번호는 4~72자로 입력해주세요.");
+        return;
+      }
+      if (p !== pc) {
+        setError("새 비밀번호가 일치하지 않습니다.");
+        return;
+      }
+    }
+
+    // ✅ payload 구성 (password는 입력됐을 때만 포함)
+    const payload: any = { username: u, displayName: d };
+    if (p) payload.password = p;
+
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/users/${userId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: u, displayName: d }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -48,6 +72,8 @@ export default function AdminUserEditForm({
         return;
       }
       setDone("저장 완료");
+      setNewPassword("");
+      setNewPasswordConfirm("");
       router.refresh();
     } catch {
       setError("유저 수정 중 오류가 발생했습니다.");
@@ -80,6 +106,29 @@ export default function AdminUserEditForm({
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               autoComplete="off"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="newPassword">새 비밀번호 (선택)</Label>
+            <Input
+              id="newPassword"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
+              placeholder="변경 시에만 입력"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="newPasswordConfirm">새 비밀번호 확인</Label>
+            <Input
+              id="newPasswordConfirm"
+              type="password"
+              value={newPasswordConfirm}
+              onChange={(e) => setNewPasswordConfirm(e.target.value)}
+              autoComplete="new-password"
             />
           </div>
 
