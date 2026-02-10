@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import { formatDateTime } from "@/lib/datetime";
 
 import DashboardHeader from "@/components/dashboard-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,11 +78,11 @@ export default async function AdminUserDetailPage({
             <div className="text-sm text-muted-foreground">
               가입일:{" "}
               {user.created_at
-                ? new Date(user.created_at).toLocaleString()
+                ? formatDateTime(user.created_at)
                 : "-"}
             </div>
             <div className="text-sm text-muted-foreground">
-              마지막 활동: {lastAt ? new Date(lastAt).toLocaleString() : "-"}
+              마지막 활동: {lastAt ? formatDateTime(lastAt) : "-"}
             </div>
           </CardContent>
         </Card>

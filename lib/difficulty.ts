@@ -25,7 +25,7 @@ export function difficultyBadgeClass(d: "easy" | "medium" | "project"): string {
     case "medium":
       return "bg-yellow-600/20 text-yellow-200 border-yellow-600/30";
     case "project":
-      return "bg-rose-600/20 text-rose-200 border-rose-600/30";
+      return "bg-violet-600/20 text-violet-200 border-violet-600/30";
     default:
       return "bg-muted text-foreground border-border";
   }

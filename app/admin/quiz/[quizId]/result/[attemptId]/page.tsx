@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import HighlightOnView from "@/components/highlight-on-view";
 import { looksLikeHtmlPost as looksLikeHtml } from "@/lib/html/looksLikeHtml";
 import { parseOptions } from "@/lib/quiz/parseOptions";
+import { formatDateTime } from "@/lib/datetime";
 
 interface PageProps {
   params: Promise<{ quizId: string; attemptId: string }>;
@@ -300,7 +301,7 @@ export default async function AdminQuizAttemptResultPage({
                 )}
 
                 <div className="ml-auto text-xs text-muted-foreground">
-                  {new Date(attempt.created_at).toLocaleString()}
+                  {formatDateTime(attempt.created_at)}
                 </div>
               </div>
             </div>

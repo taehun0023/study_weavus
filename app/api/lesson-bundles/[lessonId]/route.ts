@@ -620,13 +620,6 @@ export async function PUT(
     );
   }
 
-  if (hasQuiz && questions.length === 0) {
-    return NextResponse.json(
-      { message: "At least 1 question required when quiz reveals" },
-      { status: 400 },
-    );
-  }
-
   for (const q of hasQuiz ? questions : []) {
     if (!isNonEmptyText(q.questionText))
       return NextResponse.json(

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { formatDateTime } from "@/lib/datetime";
 
 type Note = {
   id: number;
@@ -90,7 +91,7 @@ export default function UserAdminNotes({
               >
                 <div className="text-sm whitespace-pre-wrap">{n.content}</div>
                 <div className="mt-2 text-xs text-muted-foreground">
-                  {new Date(n.created_at).toLocaleString()}
+                  {formatDateTime(n.created_at)}
                   {n.admin_id === adminId ? " · 내가 작성" : ""}
                 </div>
               </div>

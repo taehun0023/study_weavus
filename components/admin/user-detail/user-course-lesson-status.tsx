@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatDateTime } from "@/lib/datetime";
 
 type Row = {
   lesson_id: number;
@@ -21,15 +22,6 @@ type Row = {
   last_total: number | null;
   last_is_perfect: boolean | null;
 };
-
-function fmt(dt: string | null) {
-  if (!dt) return "-";
-  try {
-    return new Date(dt).toLocaleString();
-  } catch {
-    return dt;
-  }
-}
 
 export default function UserCourseLessonStatus({
   userId,
@@ -118,7 +110,8 @@ export default function UserCourseLessonStatus({
 
                 {submitted ? (
                   <div className="mt-2 text-xs text-muted-foreground">
-                    제출일: {fmt(r.last_attempt_at)} · 점수: {r.last_score ?? 0}
+                  제출일: {formatDateTime(r.last_attempt_at)} · 점수:{" "}
+                  {r.last_score ?? 0}
                     /{r.last_total ?? 0}
                   </div>
                 ) : null}

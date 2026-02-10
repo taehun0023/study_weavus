@@ -208,9 +208,8 @@ export default function LessonSetEditor({
     // quiz: 첨부만 있어도 title 필요
     if (quizUploads.length > 0 && !quizTitle.trim()) return false;
 
-    // quiz title 있으면 문항 1개 이상 + 각 문항 정답 유효
-    if (hasQuizTitle) {
-      if (questions.length === 0) return false;
+    // quiz 문항은 선택 입력: 있을 때만 유효성 검사
+    if (hasQuizTitle && questions.length > 0) {
       for (const q of questions) {
         if (!hasMeaningfulRichText(q.questionText)) return false;
 
@@ -896,16 +895,10 @@ export default function LessonSetEditor({
               ))}
             </div>
 
-            {hasQuizTitle ? (
-              <div className="text-xs text-muted-foreground">
-                퀴즈 제목이 있으면 문항/정답을 채워야 저장됩니다.
-              </div>
-            ) : (
-              <div className="text-xs text-muted-foreground">
-                퀴즈 제목을 비우면 문제풀이(퀴즈)는 생성되지 않습니다. (단,
-                문제풀이 첨부가 있으면 제목 필요)
-              </div>
-            )}
+            <div className="text-xs text-muted-foreground">
+              퀴즈 제목을 비우면 문제풀이(퀴즈)는 생성되지 않습니다. (단,
+              문제풀이 첨부가 있으면 제목 필요)
+            </div>
           </TabsContent>
         </Tabs>
 

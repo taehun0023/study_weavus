@@ -1,4 +1,5 @@
 import { sql } from "@/lib/db"
+import { formatDateTime } from "@/lib/datetime"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { History, Trophy, Clock } from "lucide-react"
@@ -25,15 +26,6 @@ export async function AttemptHistory({ quizId, userId, currentAttemptId }: Attem
 
   // Get best score
   const bestScore = Math.max(...attempts.map((a) => a.score))
-
-  const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString("ko-KR", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-  }
 
   return (
     <Card className="bg-card border-border">
@@ -72,7 +64,7 @@ export async function AttemptHistory({ quizId, userId, currentAttemptId }: Attem
                     </div>
                     <p className="text-sm text-muted-foreground flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      {formatDate(attempt.created_at)}
+                      {formatDateTime(attempt.created_at)}
                     </p>
                   </div>
                 </div>

@@ -426,13 +426,8 @@ export default function LessonSetEditorEdit({
     (!isNonEmptyText(referenceTitle) &&
       hasMeaningfulRichText(referenceContent));
 
-  const quizNeedsValidation = isNonEmptyText(quizTitle);
-
   const quizQuestionsValid = useMemo(() => {
-    if (!quizNeedsValidation) return true;
-
-    if (!isNonEmptyText(quizTitle)) return false;
-    if (questions.length === 0) return false;
+    if (questions.length === 0) return true;
 
     for (const q of questions) {
       if (!hasMeaningfulRichText(q.questionText ?? "")) return false;
@@ -472,7 +467,7 @@ export default function LessonSetEditorEdit({
     }
 
     return true;
-  }, [quizNeedsValidation, quizTitle, questions]);
+  }, [questions]);
 
   const canSave = useMemo(() => {
     if (saving || loading) return false;
@@ -872,7 +867,7 @@ export default function LessonSetEditorEdit({
             <div className="space-y-4">
               {questions.length === 0 ? (
                 <div className="text-sm text-muted-foreground">
-                  문항이 없습니다. (퀴즈 제목이 있으면 1개 이상 필요)
+                  문항이 없습니다.
                 </div>
               ) : (
                 <div className="space-y-4">

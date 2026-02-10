@@ -6,6 +6,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import { formatDateOnly } from "@/lib/datetime";
 import DashboardHeader from "@/components/dashboard-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -58,7 +59,7 @@ export default async function InterviewsPage() {
                     <CardTitle className="text-base">{r.title}</CardTitle>
                   </CardHeader>
                   <CardContent className="text-sm text-muted-foreground flex items-center justify-between">
-                    <span>{new Date(r.created_at).toLocaleDateString()}</span>
+                    <span>{formatDateOnly(r.created_at)}</span>
                     <span className="truncate max-w-[50%] text-right">
                       {r.created_by ? `작성자: ${r.created_by}` : ""}
                     </span>

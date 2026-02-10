@@ -1,6 +1,7 @@
 import { sql } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { formatDateTime } from "@/lib/datetime";
 
 type Row = {
   kind: "quiz" | "submission";
@@ -65,7 +66,7 @@ export default async function UserRecentTimeline({
               <div className="min-w-0">
                 <div className="font-medium truncate">{r.title}</div>
                 <div className="text-xs text-muted-foreground">
-                  {new Date(r.at).toLocaleString()}
+                  {formatDateTime(r.at)}
                 </div>
               </div>
 
