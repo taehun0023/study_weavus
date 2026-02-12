@@ -1,12 +1,14 @@
 import type React from "react";
 import Link from "next/link";
 import { sql } from "@/lib/db";
+import { listCourses } from "@/lib/courses";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Coffee, Database, Network, Code } from "lucide-react";
 
 interface CourseCardsProps {
   userId: number;
+  userRole: "ADMIN" | "USER";
 }
 
 const courseIcons: Record<string, React.ElementType> = {
@@ -16,7 +18,12 @@ const courseIcons: Record<string, React.ElementType> = {
   code: Code,
 };
 
-export async function CourseCards({ userId }: CourseCardsProps) {
+export async function CourseCards({ userId, userRole }: CourseCardsProps) {
+  const visibleCourses = await listCourses({
+    includePrivate: userRole === "ADMIN",
+  });
+  const visibleIds = new Set(visibleCourses.map((c) => Number(c.id)));
+
   const courses = await sql`
   SELECT 
     c.id,
@@ -38,7 +45,9 @@ export async function CourseCards({ userId }: CourseCardsProps) {
     <section>
       <h2 className="text-xl font-semibold text-foreground mb-4">학습 과목</h2>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {courses.map((course) => {
+        {courses
+          .filter((course) => visibleIds.has(Number(course.id)))
+          .map((course) => {
           const totalQuizzes = Number(course.total_quizzes) || 0;
           const completedQuizzes = Number(course.completed_quizzes) || 0;
           const progressPercent =

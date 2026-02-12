@@ -11,6 +11,17 @@ type Body = {
   slug: string;
 };
 
+function normalizeSlug(v: unknown) {
+  return String(v ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]+/gu, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 120);
+}
+
 export async function GET(req: Request) {
   try {
     const user = await getCurrentUser();
@@ -54,9 +65,7 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => ({}))) as Partial<Body>;
     const courseId = Number(body.courseId ?? NaN);
     const name = String(body.name ?? "").trim();
-    const slug = String(body.slug ?? "")
-      .trim()
-      .toLowerCase();
+    const slug = normalizeSlug(body.slug ?? body.name);
 
     if (!Number.isFinite(courseId) || courseId <= 0)
       return NextResponse.json(

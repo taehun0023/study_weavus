@@ -1,20 +1,12 @@
 import Link from "next/link";
 import type { AuthUser } from "@/lib/auth";
 import HeaderUserBar from "@/components/header-user-bar";
-import { sql } from "@/lib/db";
-
-type CourseRow = {
-  id: number;
-  name: string;
-  slug: string;
-};
+import { listCourses } from "@/lib/courses";
 
 export default async function DashboardHeader({ user }: { user: AuthUser }) {
-  const courses = await sql<CourseRow>`
-    SELECT id, name, slug
-    FROM courses
-    ORDER BY id ASC
-  `;
+  const courses = await listCourses({
+    includePrivate: user.user_role === "ADMIN",
+  });
 
   return (
     <header

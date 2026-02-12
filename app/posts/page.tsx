@@ -1,7 +1,7 @@
 // app/posts/page.tsx
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { sql } from "@/lib/db";
+import { listCourses } from "@/lib/courses";
 
 import DashboardHeader from "@/components/dashboard-header";
 import { PostsFilter } from "@/components/posts-filter";
@@ -9,8 +9,6 @@ import { PostsList } from "@/components/posts-list";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-type CourseRow = { id: number; name: string; slug: string };
 
 interface PostsPageProps {
   searchParams: Promise<{
@@ -29,11 +27,9 @@ export default async function PostsPage({ searchParams }: PostsPageProps) {
   const courseSlug = (params.course ?? "java").toLowerCase();
   const difficulty = (params.difficulty ?? "all").toLowerCase();
 
-  const courses = await sql<CourseRow>`
-    SELECT id, name, slug
-    FROM courses
-    ORDER BY id ASC
-  `;
+  const courses = await listCourses({
+    includePrivate: user.user_role === "ADMIN",
+  });
 
   const selected =
     courses.find((c) => c.slug.toLowerCase() === courseSlug) ?? courses[0];

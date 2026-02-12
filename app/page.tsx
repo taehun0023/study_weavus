@@ -19,7 +19,7 @@ export default async function HomePage() {
 
       <main className="container mx-auto space-y-8 px-4 py-8">
         {/* 학습 과목 카드만 유지 */}
-        <CourseCards userId={user.id} />
+        <CourseCards userId={user.id} userRole={user.user_role} />
 
         {/* 관리자면 전체 유저 진행도만 */}
         {isAdmin ? <AdminUsersProgressOverview /> : null}

@@ -7,6 +7,7 @@ import DashboardHeader from "@/components/dashboard-header";
 import { Button } from "@/components/ui/button";
 import AdminUserEditForm from "@/components/admin/admin-user-edit-form";
 import AdminUserListWithDelete from "@/components/admin/admin-user-list-with-delete";
+import AdminCourseCategoryManager from "@/components/admin/admin-course-category-manager";
 
 function toInt(v: any) {
   const n = Number.parseInt(String(v ?? ""), 10);
@@ -83,6 +84,8 @@ export default async function AdminUserEditPage({
             currentEditUserId={uid}
             myUserId={me.id}
           />
+
+          <AdminCourseCategoryManager />
         </div>
       </main>
     </div>
