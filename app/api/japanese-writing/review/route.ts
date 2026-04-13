@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import {
   containsJapaneseText,
+  enforceCorrectedText,
   generateJapaneseReferenceAnswer,
   reviewJapaneseWriting,
   type JapaneseLevel,
@@ -70,24 +71,44 @@ function buildFallbackReview(args: {
   referenceAnswer: string;
 }): WritingReviewResult {
   const userText = String(args.userText ?? "").trim();
-  const hasJapaneseInput = containsJapaneseText(userText);
-
-  if (!hasJapaneseInput) {
-    return {
-      result: "fix",
-      userText,
-      correctedText: "日本語で書いてください。",
-      comment: "현재 입력은 일본어 문장이 아닙니다. 한국어 문제를 보고 일본어로 작성해 주세요.",
-    };
-  }
-
   return {
     result: "fix",
     userText,
-    correctedText: args.referenceAnswer || userText,
-    comment:
-      "AI 첨삭 연결이 일시적으로 불안정합니다. 잠시 후 다시 시도해 주세요.",
+    correctedText: args.referenceAnswer || "日本語で書いてください。",
+    comment: "AI 첨삭 연결이 일시적으로 불안정하여 임시 모범 답안을 표시합니다.",
   };
+}
+
+function buildStaticReferenceAnswer(level: JapaneseLevel, promptKo: string) {
+  const p = String(promptKo ?? "");
+
+  if (/(영화|친구|재미|인상)/.test(p)) {
+    return "昨日、友達と映画を見ました。本当におもしろかったです。";
+  }
+  if (/(주말|휴일|休日|여행|산책)/.test(p)) {
+    return "週末は家族と公園へ行って、ゆっくり散歩しました。";
+  }
+  if (/(비교|의견|찬성|반대|온라인|오프라인)/.test(p)) {
+    return "私はオンライン授業にも利点があると思いますが、集中しやすいのは対面授業だと考えます。";
+  }
+  if (/(기술|사회|영향|논리|주장)/.test(p)) {
+    return "技術の発展は生活を便利にする一方で、人間関係の希薄化を招く可能性もあると私は考えます。";
+  }
+
+  switch (level) {
+    case "N5":
+      return "私は毎朝七時に起きて、学校へ行きます。";
+    case "N4":
+      return "先週の日曜日に友達と買い物をして、とても楽しかったです。";
+    case "N3":
+      return "最近、忙しいですが、日本語を勉強すると達成感があるので続けています。";
+    case "N2":
+      return "私はこの問題について、長期的な視点で考えることが重要だと思います。";
+    case "N1":
+      return "社会課題を解決するには、個人の努力だけでなく制度的な支援と継続的な対話が不可欠です。";
+    default:
+      return "日本語で自然な文になるように、語彙と文法を見直してください。";
+  }
 }
 
 export async function POST(req: Request) {
@@ -122,7 +143,7 @@ export async function POST(req: Request) {
         promptKo,
       });
     } catch {
-      referenceAnswer = "日本語で自然な文になるように、語彙と文法を見直してください。";
+      referenceAnswer = buildStaticReferenceAnswer(level, promptKo);
     }
 
     let rawReview: WritingReviewResult;
@@ -140,8 +161,13 @@ export async function POST(req: Request) {
       });
     }
 
-    const review = finalizeReview({
+    let review = finalizeReview({
       review: rawReview,
+      userText,
+      referenceAnswer,
+    });
+    review = enforceCorrectedText({
+      review,
       userText,
       referenceAnswer,
     });

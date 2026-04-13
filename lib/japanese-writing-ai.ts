@@ -114,44 +114,133 @@ function normalizeGenerateResponse(
 }
 
 function fallbackPromptByLevel(level: JapaneseLevel): GeneratedWritingPrompt {
-  switch (level) {
-    case "N5":
-      return {
-        level,
+  const pool: Record<JapaneseLevel, Array<{ promptKo: string; hint: string }>> = {
+    N5: [
+      {
         promptKo: "오늘 아침에 무엇을 했는지 일본어로 한 문장으로 써보세요.",
         hint: "기본 동사와 현재/과거형을 사용해 보세요.",
-      };
-    case "N4":
-      return {
-        level,
+      },
+      {
+        promptKo: "가장 좋아하는 음식이 무엇인지 일본어로 간단히 써보세요.",
+        hint: "좋아하는 이유를 짧게 덧붙여 보세요.",
+      },
+      {
+        promptKo: "어제 날씨가 어땠는지 일본어로 한 문장으로 써보세요.",
+        hint: "날씨 형용사 과거형을 사용해 보세요.",
+      },
+    ],
+    N4: [
+      {
         promptKo: "주말에 친구와 무엇을 했는지 1~2문장으로 일본어로 써보세요.",
         hint: "시간 표현과 행동 순서를 자연스럽게 연결해 보세요.",
-      };
-    case "N3":
-      return {
-        level,
+      },
+      {
+        promptKo: "최근에 본 영화나 드라마에 대해 일본어로 소개해 보세요.",
+        hint: "재미있었던 이유를 포함해 보세요.",
+      },
+      {
+        promptKo: "평일 저녁 루틴을 일본어로 1~2문장으로 써보세요.",
+        hint: "먼저/그다음 같은 연결 표현을 넣어 보세요.",
+      },
+    ],
+    N3: [
+      {
         promptKo: "최근에 기억에 남는 일을 설명하고, 왜 인상적이었는지 일본어로 써보세요.",
         hint: "경험 + 감정 + 이유를 포함해 보세요.",
-      };
-    case "N2":
-      return {
-        level,
+      },
+      {
+        promptKo: "학습 습관을 설명하고, 그것이 왜 효과적인지 일본어로 써보세요.",
+        hint: "이유를 2개 이상 제시해 보세요.",
+      },
+      {
+        promptKo: "스트레스를 받을 때 어떻게 해결하는지 일본어로 써보세요.",
+        hint: "구체적인 예시를 한 가지 포함해 보세요.",
+      },
+    ],
+    N2: [
+      {
         promptKo: "온라인 수업과 오프라인 수업을 비교하고, 자신의 의견을 일본어로 써보세요.",
         hint: "비교 표현과 이유 제시를 분명하게 써보세요.",
-      };
-    case "N1":
-      return {
-        level,
+      },
+      {
+        promptKo: "도시 생활과 지방 생활의 장단점을 비교해 일본어로 설명해 보세요.",
+        hint: "장점/단점을 균형 있게 써보세요.",
+      },
+      {
+        promptKo: "재택근무가 생산성에 미치는 영향에 대해 의견을 일본어로 써보세요.",
+        hint: "근거를 2가지 이상 제시해 보세요.",
+      },
+    ],
+    N1: [
+      {
         promptKo: "기술 발전이 인간관계에 미치는 영향에 대해 자신의 견해를 일본어로 논리적으로 써보세요.",
         hint: "주장-근거-예시 구조로 작성해 보세요.",
-      };
-    default:
-      return {
-        level,
-        promptKo: "자신의 하루를 일본어로 설명해 보세요.",
-        hint: "문장 흐름을 자연스럽게 이어 보세요.",
-      };
+      },
+      {
+        promptKo: "개인의 자유와 사회적 책임의 균형에 대해 일본어로 논술해 보세요.",
+        hint: "반론을 인정한 뒤 재반박해 보세요.",
+      },
+      {
+        promptKo: "AI 시대에 인간 고유의 역량이 무엇인지 일본어로 논리적으로 써보세요.",
+        hint: "추상 개념을 구체 사례와 연결해 보세요.",
+      },
+    ],
+  };
+
+  const candidates = pool[level] ?? pool.N3;
+  const idx = Math.floor(Math.random() * candidates.length);
+  const picked = candidates[idx];
+  return {
+    level,
+    promptKo: picked.promptKo,
+    hint: picked.hint,
+  };
+}
+
+function isGenericCorrectedText(text: string) {
+  const t = String(text ?? "").trim();
+  if (!t) return true;
+  return /(日本語で書いてください|日本語で作成|見直してください|もう一度|再入力)/.test(t);
+}
+
+function shouldReplaceCorrectedText(correctedText: string, userText: string) {
+  if (!containsJapaneseText(correctedText)) return true;
+  if (correctedText === userText) return true;
+  if (isGenericCorrectedText(correctedText)) return true;
+  if (correctedText.length < 8) return true;
+  return false;
+}
+
+export function enforceCorrectedText(args: {
+  review: WritingReviewResult;
+  userText: string;
+  referenceAnswer: string;
+}) {
+  const review = { ...args.review };
+  const userText = String(args.userText ?? "").trim();
+  const referenceAnswer = String(args.referenceAnswer ?? "").trim();
+
+  if (review.result === "fix" && shouldReplaceCorrectedText(review.correctedText, userText)) {
+    review.correctedText = referenceAnswer || review.correctedText;
   }
+
+  if (!containsJapaneseText(userText)) {
+    review.result = "fix";
+    review.comment = "일본어로 작성해 주세요. 현재 입력은 일본어 문장이 아닙니다.";
+    if (referenceAnswer) {
+      review.correctedText = referenceAnswer;
+    }
+  }
+
+  if (review.result === "ok" && !review.comment.trim()) {
+    review.comment = "自然で正しい表現です。";
+  }
+
+  if (review.result === "fix" && !review.comment.trim()) {
+    review.comment = "문법, 조사, 어휘, 문장 흐름을 자연스럽게 수정했습니다.";
+  }
+
+  return review;
 }
 
 function normalizeReviewResponse(
@@ -222,6 +311,8 @@ export async function generateJapaneseWritingPrompt(level: JapaneseLevel) {
     `level: ${normalizedLevel}`,
     "The prompt must be written in Korean and ask user to write Japanese.",
     "Hint should be short, practical, and also in Korean.",
+    `nonce: ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    "Avoid repeating the same prompt as previous response.",
   ].join("\n");
   try {
     const raw = await askForJson(systemPrompt, userPrompt);
