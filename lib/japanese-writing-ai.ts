@@ -113,6 +113,47 @@ function normalizeGenerateResponse(
   };
 }
 
+function fallbackPromptByLevel(level: JapaneseLevel): GeneratedWritingPrompt {
+  switch (level) {
+    case "N5":
+      return {
+        level,
+        promptKo: "오늘 아침에 무엇을 했는지 일본어로 한 문장으로 써보세요.",
+        hint: "기본 동사와 현재/과거형을 사용해 보세요.",
+      };
+    case "N4":
+      return {
+        level,
+        promptKo: "주말에 친구와 무엇을 했는지 1~2문장으로 일본어로 써보세요.",
+        hint: "시간 표현과 행동 순서를 자연스럽게 연결해 보세요.",
+      };
+    case "N3":
+      return {
+        level,
+        promptKo: "최근에 기억에 남는 일을 설명하고, 왜 인상적이었는지 일본어로 써보세요.",
+        hint: "경험 + 감정 + 이유를 포함해 보세요.",
+      };
+    case "N2":
+      return {
+        level,
+        promptKo: "온라인 수업과 오프라인 수업을 비교하고, 자신의 의견을 일본어로 써보세요.",
+        hint: "비교 표현과 이유 제시를 분명하게 써보세요.",
+      };
+    case "N1":
+      return {
+        level,
+        promptKo: "기술 발전이 인간관계에 미치는 영향에 대해 자신의 견해를 일본어로 논리적으로 써보세요.",
+        hint: "주장-근거-예시 구조로 작성해 보세요.",
+      };
+    default:
+      return {
+        level,
+        promptKo: "자신의 하루를 일본어로 설명해 보세요.",
+        hint: "문장 흐름을 자연스럽게 이어 보세요.",
+      };
+  }
+}
+
 function normalizeReviewResponse(
   input: unknown,
   userText: string,
@@ -182,9 +223,14 @@ export async function generateJapaneseWritingPrompt(level: JapaneseLevel) {
     "The prompt must be written in Korean and ask user to write Japanese.",
     "Hint should be short, practical, and also in Korean.",
   ].join("\n");
-  const raw = await askForJson(systemPrompt, userPrompt);
-  const parsed = parseJsonObject(raw);
-  return normalizeGenerateResponse(parsed, normalizedLevel);
+  try {
+    const raw = await askForJson(systemPrompt, userPrompt);
+    const parsed = parseJsonObject(raw);
+    return normalizeGenerateResponse(parsed, normalizedLevel);
+  } catch {
+    // Fallback for missing OpenAI key / provider errors / invalid JSON output.
+    return fallbackPromptByLevel(normalizedLevel);
+  }
 }
 
 export async function reviewJapaneseWriting(args: {
