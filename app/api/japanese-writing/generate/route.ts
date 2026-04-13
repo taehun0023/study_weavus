@@ -22,13 +22,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const body = (await req.json().catch(() => null)) as { level?: string } | null;
+    const body = (await req.json().catch(() => null)) as {
+      level?: string;
+      excludePrompt?: string;
+    } | null;
     const level = parseLevel(body?.level);
     if (!level) {
       return NextResponse.json({ message: "Invalid level" }, { status: 400 });
     }
 
-    const generated = await generateJapaneseWritingPrompt(level);
+    const generated = await generateJapaneseWritingPrompt({
+      level,
+      excludePrompt: String(body?.excludePrompt ?? "").trim(),
+    });
     return NextResponse.json(generated);
   } catch (error) {
     const message =

@@ -96,7 +96,10 @@ export default function JapaneseWritingPractice() {
       const res = await fetch("/api/japanese-writing/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ level }),
+        body: JSON.stringify({
+          level,
+          excludePrompt: problem?.promptKo ?? "",
+        }),
       });
 
       const data = await safeJson<GeneratedPrompt & { message?: string }>(res);
@@ -172,7 +175,7 @@ export default function JapaneseWritingPractice() {
         <CardHeader className="pb-3">
           <CardTitle className="text-2xl tracking-tight">日本語作文</CardTitle>
           <p className="text-sm text-muted-foreground">
-            N1〜N5レベルを選択して、韓国語の問題を見ながら日本語作文を練習できます。
+            N1〜N5レベルを選択して、韓国語の原文を日本語に自然に訳す練習ができます。
           </p>
         </CardHeader>
       </Card>
@@ -233,7 +236,7 @@ export default function JapaneseWritingPractice() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">入力</CardTitle>
           <p className="text-xs text-muted-foreground">
-            下の韓国語を見て、日本語で書いてください
+            下の韓国語の原文を、自然な日本語の1文として書いてください
           </p>
         </CardHeader>
         <CardContent className="space-y-3">

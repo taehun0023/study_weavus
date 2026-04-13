@@ -113,83 +113,92 @@ function normalizeGenerateResponse(
   };
 }
 
-function fallbackPromptByLevel(level: JapaneseLevel): GeneratedWritingPrompt {
+function fallbackPromptByLevel(
+  level: JapaneseLevel,
+  excludePrompt?: string,
+): GeneratedWritingPrompt {
   const pool: Record<JapaneseLevel, Array<{ promptKo: string; hint: string }>> = {
     N5: [
       {
-        promptKo: "오늘 아침에 무엇을 했는지 일본어로 한 문장으로 써보세요.",
-        hint: "기본 동사와 현재/과거형을 사용해 보세요.",
+        promptKo: "오늘 아침에는 늦잠을 자서 서둘러 준비한 뒤, 지각하지 않으려고 뛰어서 학교에 갔다.",
+        hint: "시간 순서와 과거형을 자연스럽게 연결해 보세요.",
       },
       {
-        promptKo: "가장 좋아하는 음식이 무엇인지 일본어로 간단히 써보세요.",
-        hint: "좋아하는 이유를 짧게 덧붙여 보세요.",
+        promptKo: "저는 매일 저녁에 가족과 함께 식사하면서 하루 동안 있었던 일을 이야기하는 시간이 가장 좋다.",
+        hint: "일상 표현과 감정 표현을 함께 써보세요.",
       },
       {
-        promptKo: "어제 날씨가 어땠는지 일본어로 한 문장으로 써보세요.",
-        hint: "날씨 형용사 과거형을 사용해 보세요.",
+        promptKo: "어제는 비가 많이 와서 외출하지 못했지만, 집에서 책을 읽으며 조용하게 시간을 보냈다.",
+        hint: "역접 표현(하지만)과 행동 묘사를 넣어 보세요.",
       },
     ],
     N4: [
       {
-        promptKo: "주말에 친구와 무엇을 했는지 1~2문장으로 일본어로 써보세요.",
-        hint: "시간 표현과 행동 순서를 자연스럽게 연결해 보세요.",
+        promptKo: "주말에 친구와 새로 생긴 카페에 갔는데 분위기가 좋았고, 커피도 맛있어서 다음에 또 가고 싶다고 느꼈다.",
+        hint: "경험 + 감상을 한 문장 안에서 연결해 보세요.",
       },
       {
-        promptKo: "최근에 본 영화나 드라마에 대해 일본어로 소개해 보세요.",
-        hint: "재미있었던 이유를 포함해 보세요.",
+        promptKo: "지난주에는 회사 일이 많아 피곤했지만, 매일 계획을 세워 끝까지 해내면서 성취감을 느꼈다.",
+        hint: "피곤했지만/해냈다 같은 대비 표현을 살려 보세요.",
       },
       {
-        promptKo: "평일 저녁 루틴을 일본어로 1~2문장으로 써보세요.",
-        hint: "먼저/그다음 같은 연결 표현을 넣어 보세요.",
+        promptKo: "저는 아침에 일찍 일어나 가볍게 운동을 하고 출근하면 하루 종일 집중이 잘되어 업무 효율이 높아진다.",
+        hint: "습관과 결과의 인과관계를 표현해 보세요.",
       },
     ],
     N3: [
       {
-        promptKo: "최근에 기억에 남는 일을 설명하고, 왜 인상적이었는지 일본어로 써보세요.",
-        hint: "경험 + 감정 + 이유를 포함해 보세요.",
+        promptKo: "오늘은 해야 할 일이 많아서 피곤했지만, 미루지 않고 끝까지 해내려고 노력했다.",
+        hint: "역접(〜ものの/〜が)과 의지 표현을 자연스럽게 써보세요.",
       },
       {
-        promptKo: "학습 습관을 설명하고, 그것이 왜 효과적인지 일본어로 써보세요.",
-        hint: "이유를 2개 이상 제시해 보세요.",
+        promptKo: "최근에는 한국어 원문을 일본어로 바꿔 보는 연습을 하면서, 문장 구조를 더 정확하게 이해하게 되었다.",
+        hint: "변화(〜ようになった) 표현을 사용해 보세요.",
       },
       {
-        promptKo: "스트레스를 받을 때 어떻게 해결하는지 일본어로 써보세요.",
-        hint: "구체적인 예시를 한 가지 포함해 보세요.",
+        promptKo: "회의에서 제안한 아이디어가 바로 채택되지는 않았지만, 팀원들과 논의하는 과정에서 더 나은 방향을 찾을 수 있었다.",
+        hint: "수동/가능 표현과 과거 서술을 연결해 보세요.",
       },
     ],
     N2: [
       {
-        promptKo: "온라인 수업과 오프라인 수업을 비교하고, 자신의 의견을 일본어로 써보세요.",
-        hint: "비교 표현과 이유 제시를 분명하게 써보세요.",
+        promptKo: "온라인 수업은 시간과 장소의 제약이 적다는 장점이 있지만, 학습 집중도와 상호작용 측면에서는 오프라인 수업이 더 효과적이라고 생각한다.",
+        hint: "장점/단점 비교 후 자신의 결론을 명확히 제시해 보세요.",
       },
       {
-        promptKo: "도시 생활과 지방 생활의 장단점을 비교해 일본어로 설명해 보세요.",
-        hint: "장점/단점을 균형 있게 써보세요.",
+        promptKo: "재택근무는 출퇴근 시간을 줄여 삶의 질을 높일 수 있지만, 협업 속도와 조직 소속감을 약화시킬 수 있다는 우려도 존재한다.",
+        hint: "양면성을 균형 있게 서술해 보세요.",
       },
       {
-        promptKo: "재택근무가 생산성에 미치는 영향에 대해 의견을 일본어로 써보세요.",
-        hint: "근거를 2가지 이상 제시해 보세요.",
+        promptKo: "도시 생활은 다양한 기회와 편의시설을 제공하지만, 높은 생활비와 빠른 속도의 환경이 장기적으로 피로를 누적시키기도 한다.",
+        hint: "객관적 설명 + 개인적 평가를 함께 써보세요.",
       },
     ],
     N1: [
       {
-        promptKo: "기술 발전이 인간관계에 미치는 영향에 대해 자신의 견해를 일본어로 논리적으로 써보세요.",
-        hint: "주장-근거-예시 구조로 작성해 보세요.",
+        promptKo: "기술 발전은 정보 접근성과 생산성을 비약적으로 향상시켰지만, 인간의 주의력 분산과 관계의 표면화를 심화시켜 사회적 신뢰 구조에 장기적 부담을 준다.",
+        hint: "추상 개념을 인과 구조로 논리적으로 전개해 보세요.",
       },
       {
-        promptKo: "개인의 자유와 사회적 책임의 균형에 대해 일본어로 논술해 보세요.",
-        hint: "반론을 인정한 뒤 재반박해 보세요.",
+        promptKo: "개인의 자유는 민주사회의 핵심 가치이지만, 공동체의 안전과 지속 가능성을 유지하기 위해서는 일정 수준의 제도적 규범과 사회적 책임이 병행되어야 한다.",
+        hint: "양립 관계를 접속 표현으로 정교하게 묶어 보세요.",
       },
       {
-        promptKo: "AI 시대에 인간 고유의 역량이 무엇인지 일본어로 논리적으로 써보세요.",
-        hint: "추상 개념을 구체 사례와 연결해 보세요.",
+        promptKo: "AI 시대에 인간의 고유한 역량은 단순 계산 능력이 아니라 맥락 판단, 윤리적 숙고, 그리고 불확실성 속에서 의미를 구성하는 해석 능력이라고 본다.",
+        hint: "개념 정의 후 근거를 제시하는 논증 구조를 사용해 보세요.",
       },
     ],
   };
 
-  const candidates = pool[level] ?? pool.N3;
-  const idx = Math.floor(Math.random() * candidates.length);
-  const picked = candidates[idx];
+  const trimmedExclude = String(excludePrompt ?? "").trim();
+  const source = pool[level] ?? pool.N3;
+  const candidates =
+    trimmedExclude.length > 0
+      ? source.filter((c) => c.promptKo.trim() !== trimmedExclude)
+      : source;
+  const finalCandidates = candidates.length > 0 ? candidates : source;
+  const idx = Math.floor(Math.random() * finalCandidates.length);
+  const picked = finalCandidates[idx];
   return {
     level,
     promptKo: picked.promptKo,
@@ -290,18 +299,23 @@ async function askForJson(systemPrompt: string, userPrompt: string) {
   });
 }
 
-export async function generateJapaneseWritingPrompt(level: JapaneseLevel) {
-  const normalizedLevel = normalizeLevel(level);
+export async function generateJapaneseWritingPrompt(args: {
+  level: JapaneseLevel;
+  excludePrompt?: string;
+}) {
+  const normalizedLevel = normalizeLevel(args.level);
+  const excludePrompt = String(args.excludePrompt ?? "").trim();
 
   const systemPrompt = [
-    "Generate one Korean prompt for Korean-to-Japanese writing practice.",
+    "Generate one Korean source sentence for Korean-to-Japanese translation writing practice.",
     "Conditions:",
     "- Level: N1 ~ N5",
-    "- N5: very simple daily expression, 1 short sentence.",
-    "- N4: daily conversation, 1 to 2 sentences.",
-    "- N3: experience, feeling, reason, 1 to 3 sentences.",
-    "- N2: opinion, comparison, explanation.",
-    "- N1: abstract topic and logical explanation.",
+    "- Return a declarative Korean sentence, not a question or instruction.",
+    "- N5: simple daily sentence, around 25~40 Korean chars.",
+    "- N4: daily sentence with one connector, around 35~55 chars.",
+    "- N3: slightly longer sentence with reason/contrast, around 45~75 chars.",
+    "- N2: opinion/comparison sentence, around 55~90 chars.",
+    "- N1: abstract/logical sentence, around 70~120 chars.",
     "Return JSON only:",
     '{ "level": "N3", "promptKo": "...", "hint": "..." }',
     "No text outside JSON.",
@@ -309,18 +323,26 @@ export async function generateJapaneseWritingPrompt(level: JapaneseLevel) {
 
   const userPrompt = [
     `level: ${normalizedLevel}`,
-    "The prompt must be written in Korean and ask user to write Japanese.",
+    "promptKo must be a Korean source sentence to translate into Japanese.",
+    "Do not include any question marks.",
     "Hint should be short, practical, and also in Korean.",
+    excludePrompt ? `Do not repeat this exact sentence: ${excludePrompt}` : "",
     `nonce: ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     "Avoid repeating the same prompt as previous response.",
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
   try {
     const raw = await askForJson(systemPrompt, userPrompt);
     const parsed = parseJsonObject(raw);
-    return normalizeGenerateResponse(parsed, normalizedLevel);
+    const generated = normalizeGenerateResponse(parsed, normalizedLevel);
+    if (excludePrompt && generated.promptKo.trim() === excludePrompt) {
+      return fallbackPromptByLevel(normalizedLevel, excludePrompt);
+    }
+    return generated;
   } catch {
     // Fallback for missing OpenAI key / provider errors / invalid JSON output.
-    return fallbackPromptByLevel(normalizedLevel);
+    return fallbackPromptByLevel(normalizedLevel, excludePrompt);
   }
 }
 
