@@ -63,7 +63,8 @@ type CategoryNodeProps = {
   setSubCatName: Dispatch<SetStateAction<Record<number, string>>>;
 
   refreshFiles: (categoryId: number) => Promise<void>;
-  uploadAndAttach: (categoryId: number, file: File) => Promise<void>;
+  uploadAndAttach: (categoryId: number, files: File[]) => Promise<void>;
+  downloadAllFiles: (categoryId: number) => Promise<void>;
   deleteFile: (fileId: number, categoryId: number) => Promise<void>;
 
   renameCategory: (categoryId: number) => Promise<void>;
@@ -87,6 +88,7 @@ const CategoryNode = memo(function CategoryNode(props: CategoryNodeProps) {
     setSubCatName,
     refreshFiles,
     uploadAndAttach,
+    downloadAllFiles,
     deleteFile,
     renameCategory,
     deleteCategory,
@@ -175,12 +177,13 @@ const CategoryNode = memo(function CategoryNode(props: CategoryNodeProps) {
                 >
                   <input
                     type="file"
+                    multiple
                     className="hidden"
                     onPointerDownCapture={stop}
                     onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (!f) return;
-                      uploadAndAttach(c.id, f).catch(() => {});
+                      const files = Array.from(e.target.files ?? []);
+                      if (files.length === 0) return;
+                      uploadAndAttach(c.id, files).catch(() => {});
                       e.currentTarget.value = "";
                     }}
                   />
@@ -188,6 +191,32 @@ const CategoryNode = memo(function CategoryNode(props: CategoryNodeProps) {
                     파일 추가
                   </span>
                 </label>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="cursor-pointer"
+                  onClick={() => downloadAllFiles(c.id)}
+                  disabled={busy || (filesMap[c.id]?.length ?? 0) === 0}
+                  type="button"
+                >
+                  일괄 다운로드
+                </Button>
+              </div>
+            )}
+
+            {!isAdmin && (filesMap[c.id]?.length ?? 0) > 0 && (
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="cursor-pointer"
+                  onClick={() => downloadAllFiles(c.id)}
+                  disabled={busy}
+                  type="button"
+                >
+                  일괄 다운로드
+                </Button>
               </div>
             )}
 
@@ -298,6 +327,7 @@ const CategoryNode = memo(function CategoryNode(props: CategoryNodeProps) {
                       setSubCatName={setSubCatName}
                       refreshFiles={refreshFiles}
                       uploadAndAttach={uploadAndAttach}
+                      downloadAllFiles={downloadAllFiles}
                       deleteFile={deleteFile}
                       renameCategory={renameCategory}
                       deleteCategory={deleteCategory}
@@ -376,6 +406,14 @@ export default function ProjectDetail({
   }, [project.id]);
 
   async function refreshFiles(categoryId: number) {
+    const items = await getFiles(categoryId);
+    setFilesMap((prev) => ({
+      ...prev,
+      [categoryId]: items,
+    }));
+  }
+
+  async function getFiles(categoryId: number) {
     const r = await fetch(
       `/api/projects/${project.id}/categories/${categoryId}/files`,
       {
@@ -385,10 +423,7 @@ export default function ProjectDetail({
     const j: any = await safeJson(r);
     if (!r.ok)
       throw new Error(j?.message || `파일 로드 실패 (HTTP ${r.status})`);
-    setFilesMap((prev) => ({
-      ...prev,
-      [categoryId]: (j?.items ?? []) as FileItem[],
-    }));
+    return (j?.items ?? []) as FileItem[];
   }
 
   async function createCategoryRoot() {
@@ -509,7 +544,9 @@ export default function ProjectDetail({
     await refreshCategories();
   }
 
-  async function uploadAndAttach(categoryId: number, file: File) {
+  async function uploadAndAttach(categoryId: number, files: File[]) {
+    if (files.length === 0) return;
+
     setBusy(true);
     setErrorMsg("");
 
@@ -524,69 +561,122 @@ export default function ProjectDetail({
           listJson?.message || `파일 목록 조회 실패 (HTTP ${listRes.status})`,
         );
 
-      const currentFiles = (listJson?.items ?? []) as FileItem[];
-      const dup = currentFiles.find(
-        (x) => (x.filename ?? "").trim() === file.name.trim(),
-      );
+      const currentFiles = [...((listJson?.items ?? []) as FileItem[])];
 
-      let overwrite = false;
-      let existingFileId: number | undefined = undefined;
-
-      if (dup) {
-        const ok = window.confirm(
-          `이미 등록된 파일입니다.\n"${file.name}"\n덮어쓰시겠습니까?`,
+      for (const file of files) {
+        const dup = currentFiles.find(
+          (x) => (x.filename ?? "").trim() === file.name.trim(),
         );
-        if (!ok) return;
-        overwrite = true;
-        existingFileId = dup.id;
-      }
 
-      const form = new FormData();
-      form.append("file", file);
+        let overwrite = false;
+        let existingFileId: number | undefined = undefined;
 
-      const upRes = await fetch("/api/upload", { method: "POST", body: form });
-      const upJ: any = await safeJson(upRes);
-      if (!upRes.ok)
-        throw new Error(upJ?.message || `업로드 실패 (HTTP ${upRes.status})`);
+        if (dup) {
+          const ok = window.confirm(
+            `이미 등록된 파일입니다.\n"${file.name}"\n덮어쓰시겠습니까?`,
+          );
+          if (!ok) {
+            continue;
+          }
+          overwrite = true;
+          existingFileId = dup.id;
+        }
 
-      let uploadId = Number(upJ?.id ?? NaN);
-      if (!Number.isFinite(uploadId)) {
-        const url = String(upJ?.url ?? "");
-        const m = url.match(/\/api\/upload\/(\d+)/);
-        if (m) uploadId = Number(m[1]);
-      }
-      if (!Number.isFinite(uploadId) || uploadId <= 0) {
-        throw new Error("업로드 응답에 id/url이 없습니다.");
-      }
+        const form = new FormData();
+        form.append("file", file);
 
-      const title = (newFileTitle[categoryId] ?? file.name).trim() || file.name;
+        const upRes = await fetch("/api/upload", { method: "POST", body: form });
+        const upJ: any = await safeJson(upRes);
+        if (!upRes.ok) {
+          throw new Error(upJ?.message || `업로드 실패 (HTTP ${upRes.status})`);
+        }
 
-      const attachRes = await fetch(
-        `/api/projects/${project.id}/categories/${categoryId}/files`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title,
-            uploadId,
-            overwrite,
-            existingFileId,
-            filename: file.name,
-          }),
-        },
-      );
+        let uploadId = Number(upJ?.id ?? NaN);
+        if (!Number.isFinite(uploadId)) {
+          const url = String(upJ?.url ?? "");
+          const m = url.match(/\/api\/upload\/(\d+)/);
+          if (m) uploadId = Number(m[1]);
+        }
+        if (!Number.isFinite(uploadId) || uploadId <= 0) {
+          throw new Error("업로드 응답에 id/url이 없습니다.");
+        }
 
-      const attachJ: any = await safeJson(attachRes);
-      if (!attachRes.ok) {
-        throw new Error(
-          attachJ?.message || `등록 실패 (HTTP ${attachRes.status})`,
+        const title = (newFileTitle[categoryId] ?? file.name).trim() || file.name;
+
+        const attachRes = await fetch(
+          `/api/projects/${project.id}/categories/${categoryId}/files`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title,
+              uploadId,
+              overwrite,
+              existingFileId,
+              filename: file.name,
+            }),
+          },
         );
+
+        const attachJ: any = await safeJson(attachRes);
+        if (!attachRes.ok) {
+          throw new Error(
+            attachJ?.message || `등록 실패 (HTTP ${attachRes.status})`,
+          );
+        }
+
+        currentFiles.unshift({
+          id: Number(attachJ?.id ?? 0),
+          title,
+          upload_id: uploadId,
+          filename: file.name,
+          mime: file.type || "application/octet-stream",
+          size: file.size,
+          created_at: new Date().toISOString(),
+        });
       }
 
       setNewFileTitle((p) => ({ ...p, [categoryId]: "" }));
       await refreshFiles(categoryId);
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : "파일 추가 실패");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function downloadAllFiles(categoryId: number) {
+    setBusy(true);
+    setErrorMsg("");
+
+    try {
+      const items =
+        filesMap[categoryId] && filesMap[categoryId].length > 0
+          ? filesMap[categoryId]
+          : await getFiles(categoryId);
+
+      if (items.length === 0) {
+        throw new Error("다운로드할 파일이 없습니다.");
+      }
+
+      setFilesMap((prev) => ({
+        ...prev,
+        [categoryId]: items,
+      }));
+
+      for (const file of items) {
+        const link = document.createElement("a");
+        link.href = `/api/upload/${file.upload_id}?download=1`;
+        link.download = file.filename;
+        link.rel = "noopener";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        await new Promise((resolve) => window.setTimeout(resolve, 150));
+      }
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : "일괄 다운로드 실패");
     } finally {
       setBusy(false);
     }
@@ -815,6 +905,7 @@ export default function ProjectDetail({
             setSubCatName={setSubCatName}
             refreshFiles={refreshFiles}
             uploadAndAttach={uploadAndAttach}
+            downloadAllFiles={downloadAllFiles}
             deleteFile={deleteFile}
             renameCategory={renameCategory}
             deleteCategory={deleteCategory}

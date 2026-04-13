@@ -4,6 +4,8 @@ export const runtime = "nodejs";
 import { NextResponse } from "next/server";
 import { sql, pool } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
+import { upsertKnowledgeFromPost } from "@/lib/assistant-knowledge";
+import { getAssistantLimitSettings } from "@/lib/assistant-limits";
 
 type Ctx = { params: { postId: string } | Promise<{ postId: string }> };
 
@@ -61,6 +63,16 @@ export async function PUT(req: Request, ctx: Ctx) {
     const courseIdRaw = Number(body.courseId ?? NaN);
     const courseId =
       Number.isFinite(courseIdRaw) && courseIdRaw > 0 ? courseIdRaw : null;
+    const learnForAssistant = body.learnForAssistant === true;
+    if (learnForAssistant) {
+      const settings = await getAssistantLimitSettings();
+      if (!settings.learning_enabled) {
+        return NextResponse.json(
+          { message: "학습 모드가 비활성화되어 AI 학습 등록이 차단되었습니다." },
+          { status: 409 },
+        );
+      }
+    }
 
     if (!title)
       return NextResponse.json(
@@ -77,6 +89,13 @@ export async function PUT(req: Request, ctx: Ctx) {
       WHERE id = ${id}
       RETURNING id
     `;
+
+    await upsertKnowledgeFromPost({
+      postId: id,
+      title,
+      content,
+      isActive: learnForAssistant,
+    });
 
     return NextResponse.json({ ok: true, id: rows?.[0]?.id ?? id });
   } catch (e: any) {

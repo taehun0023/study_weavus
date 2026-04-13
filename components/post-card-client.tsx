@@ -1,8 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import PostAdminActions from "@/components/post-admin-actions";
 import { difficultyBadgeClass, difficultyLabel } from "@/lib/difficulty";
 
@@ -26,7 +24,7 @@ export default function PostCardClient({
   postType: PostType;
   isAdmin: boolean;
   returnHref: string;
-  isPassed: boolean; // ✅ 추가
+  isPassed: boolean;
 }) {
   const router = useRouter();
 
@@ -37,52 +35,72 @@ export default function PostCardClient({
 
   const label = difficultyLabel(difficulty);
 
+  /* Extract leading number from title like "01. ...", "3. ...", "10 ..." */
+  const numMatch = title.match(/^(\d+)[.\s]/);
+  const numPrefix = numMatch ? numMatch[1] : null;
+  const titleBody = numMatch ? title.slice(numMatch[0].length).trim() : title;
+
   return (
-    <Card
-      className="p-4 cursor-pointer hover:bg-muted/30 transition"
+    <div
+      className="group flex items-center gap-3 px-4 py-3.5 rounded-xl border border-border/50 bg-card cursor-pointer transition-all duration-150 hover:border-primary/30 hover:bg-accent/30 hover:shadow-sm"
       onClick={goDetail}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="text-lg font-semibold truncate">{title}</div>
+      {/* Number badge */}
+      {numPrefix ? (
+        <span className="shrink-0 w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-xs font-semibold text-primary tabular-nums">
+          {numPrefix}
+        </span>
+      ) : (
+        <span className="shrink-0 w-7 h-7 rounded-lg bg-muted/60 flex items-center justify-center text-xs text-muted-foreground">
+          •
+        </span>
+      )}
 
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">{courseName}</Badge>
-
-            {postType === "lesson" && label ? (
-              <Badge className={`border ${difficultyBadgeClass(label)}`}>
-                {label}
-              </Badge>
-            ) : null}
-          </div>
+      {/* Title + meta */}
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium text-foreground truncate group-hover:text-primary transition-colors">
+          {titleBody}
         </div>
-
-        {/* ✅ 오른쪽 영역: 합격 + (관리자면) 수정/삭제 */}
-        <div className="flex items-center gap-2">
-          {isPassed && postType === "lesson" && (
-            <Badge className="bg-emerald-600 text-white border border-emerald-700">
-              합격
-            </Badge>
-          )}
-
-          {isAdmin && (
-            <div
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-            >
-              <PostAdminActions
-                postId={postId}
-                postType={postType}
-                setEditHref={`/posts/${postId}/edit-set`}
-                afterDeleteHref={returnHref}
-                size="sm"
-              />
-            </div>
+        <div className="flex items-center gap-1.5 mt-1">
+          <span className="text-[11px] text-muted-foreground">{courseName}</span>
+          {postType === "lesson" && label && (
+            <>
+              <span className="text-muted-foreground/40">·</span>
+              <span
+                className={`text-[11px] font-medium px-1.5 py-0.5 rounded-md ${difficultyBadgeClass(label)}`}
+              >
+                {label}
+              </span>
+            </>
           )}
         </div>
       </div>
-    </Card>
+
+      {/* Right: pass badge + admin actions */}
+      <div className="flex items-center gap-2 shrink-0">
+        {isPassed && postType === "lesson" && (
+          <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-md diff-pass">
+            합격
+          </span>
+        )}
+
+        {isAdmin && (
+          <div
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          >
+            <PostAdminActions
+              postId={postId}
+              postType={postType}
+              setEditHref={`/posts/${postId}/edit-set`}
+              afterDeleteHref={returnHref}
+              size="sm"
+            />
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

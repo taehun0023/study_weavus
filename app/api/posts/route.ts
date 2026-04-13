@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import { upsertKnowledgeFromPost } from "@/lib/assistant-knowledge";
+import { getAssistantLimitSettings } from "@/lib/assistant-limits";
 
 export const runtime = "nodejs";
 
@@ -10,6 +12,7 @@ type Body = {
   type: "lesson" | "quiz" | "reference";
   difficulty?: "easy" | "medium" | "hard" | "project" | null;
   content: string;
+  learnForAssistant?: boolean;
 };
 
 export async function GET(req: Request) {
@@ -76,10 +79,28 @@ export async function POST(req: Request) {
   }
 
   const difficulty = (body.difficulty ?? null) as Body["difficulty"];
+  const learnForAssistant = body.learnForAssistant === true;
+  if (learnForAssistant) {
+    const settings = await getAssistantLimitSettings();
+    if (!settings.learning_enabled) {
+      return NextResponse.json(
+        { message: "학습 모드가 비활성화되어 AI 학습 등록이 차단되었습니다." },
+        { status: 409 },
+      );
+    }
+  }
   const rows = await sql<{ id: number }>`
     INSERT INTO public.posts (course_id, title, type, difficulty, content)
     VALUES (${courseId}, ${title}, ${type}, ${difficulty}, ${content})
     RETURNING id
   `;
-  return NextResponse.json({ ok: true, id: rows[0].id });
+
+  const postId = rows[0].id;
+  await upsertKnowledgeFromPost({
+    postId,
+    title,
+    content,
+    isActive: learnForAssistant,
+  });
+  return NextResponse.json({ ok: true, id: postId });
 }

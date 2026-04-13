@@ -65,15 +65,18 @@ export async function deleteSession(token: string) {
 
 /** 토큰으로 유저 조회 */
 export async function getSessionUser(token: string): Promise<AuthUser | null> {
-  const rows = (await sql`
-    SELECT u.id, u.username, u.display_name, u.user_role
-    FROM public.sessions s
-    JOIN public.users u ON s.user_id = u.id
-    WHERE s.token = ${token} AND s.expires_at > NOW()
-    LIMIT 1
-  `) as AuthUser[]
-
-  return rows[0] ?? null
+  try {
+    const rows = (await sql`
+      SELECT u.id, u.username, u.display_name, u.user_role
+      FROM public.sessions s
+      JOIN public.users u ON s.user_id = u.id
+      WHERE s.token = ${token} AND s.expires_at > NOW()
+      LIMIT 1
+    `) as AuthUser[]
+    return rows[0] ?? null
+  } catch {
+    return null
+  }
 }
 
 /** 현재 로그인 유저 */

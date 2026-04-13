@@ -21,7 +21,6 @@ export default async function PostsPage({ searchParams }: PostsPageProps) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  // ✅ Next 16: Promise로 들어오는 searchParams를 먼저 풀어야 함
   const params = await searchParams;
 
   const courseSlug = (params.course ?? "java").toLowerCase();
@@ -39,8 +38,8 @@ export default async function PostsPage({ searchParams }: PostsPageProps) {
       <div className="min-h-screen bg-background">
         <DashboardHeader user={user} />
         <main className="container mx-auto px-4 py-8">
-          <div className="text-sm text-muted-foreground">
-            courses 데이터가 없습니다.
+          <div className="rounded-xl border border-border/60 bg-card px-5 py-4 text-sm text-muted-foreground">
+            등록된 과목이 없습니다.
           </div>
         </main>
       </div>
@@ -53,15 +52,21 @@ export default async function PostsPage({ searchParams }: PostsPageProps) {
     <div className="min-h-screen bg-background">
       <DashboardHeader user={user} />
 
-      <main className="container mx-auto space-y-6 px-4 py-8">
-        <div className="text-2xl font-bold">게시글 목록</div>
+      <main className="container mx-auto px-4 py-8 space-y-5">
+        {/* Page heading */}
+        <div>
+          <h1 className="page-title">수업 목록</h1>
+          <p className="page-subtitle">{selected.name} 과목의 수업을 확인하세요.</p>
+        </div>
 
+        {/* Filters */}
         <PostsFilter
           courses={courses}
           selectedCourseSlug={selected.slug}
           selectedDifficulty={difficulty}
         />
 
+        {/* List */}
         <PostsList
           courseId={selected.id}
           courseSlug={selected.slug}

@@ -33,6 +33,7 @@ export type PostEditorPayload = {
   difficulty: Difficulty;
   type: PostType;
   content: string;
+  learnForAssistant?: boolean;
   referencePostId?: number | null;
   quizPostId?: number | null;
 };
@@ -63,6 +64,9 @@ export default function PostEditor({
   const [content, setContent] = useState(initial?.content ?? "");
 
   const [saving, setSaving] = useState(false);
+  const [learnForAssistant, setLearnForAssistant] = useState(
+    initial?.learnForAssistant === true
+  );
 
   // lesson일 때만 세트 연결(참조/퀴즈) 가능
   const [referencePostId, setReferencePostId] = useState<number | null>(
@@ -139,6 +143,7 @@ export default function PostEditor({
         difficulty,
         type,
         content,
+        learnForAssistant,
         referencePostId: type === "lesson" ? referencePostId : null,
         quizPostId: type === "lesson" ? quizPostId : null,
       };
@@ -292,6 +297,15 @@ export default function PostEditor({
         )}
 
         <QuillEditor value={content} onChange={setContent} />
+
+        <label className="text-sm flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={learnForAssistant}
+            onChange={(e) => setLearnForAssistant(e.target.checked)}
+          />
+          AI 학습 데이터로 사용
+        </label>
 
         <Button className="w-full" onClick={handleSave} disabled={!canSubmit}>
           {saving ? "저장 중..." : "저장하기"}

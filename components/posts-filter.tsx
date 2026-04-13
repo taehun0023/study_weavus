@@ -8,10 +8,15 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { difficultyButtonClass } from "@/lib/difficulty";
 
 type Course = { id: number; name: string; slug: string };
+
+const DIFFICULTIES = [
+  { key: "all", label: "전체", cls: "" },
+  { key: "easy",    label: "easy",    cls: "diff-easy" },
+  { key: "medium",  label: "medium",  cls: "diff-medium" },
+  { key: "project", label: "project", cls: "diff-project" },
+] as const;
 
 export function PostsFilter({
   courses,
@@ -20,7 +25,7 @@ export function PostsFilter({
 }: {
   courses: Course[];
   selectedCourseSlug: string;
-  selectedDifficulty: string; // all|easy|medium|project
+  selectedDifficulty: string;
 }) {
   const router = useRouter();
   const sp = useSearchParams();
@@ -28,7 +33,7 @@ export function PostsFilter({
   const setCourse = (slug: string) => {
     const next = new URLSearchParams(sp.toString());
     next.set("course", slug);
-    next.delete("difficulty"); // 과목 바꾸면 난이도는 all로
+    next.delete("difficulty");
     router.push(`/posts?${next.toString()}`);
   };
 
@@ -39,71 +44,42 @@ export function PostsFilter({
     router.push(`/posts?${next.toString()}`);
   };
 
-  const isAll = selectedDifficulty === "all";
-
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4">
-      <div className="w-[240px]">
-        <Select value={selectedCourseSlug} onValueChange={setCourse}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {courses.map((c, idx) => (
-              <SelectItem key={`${c.slug}-${c.id}-${idx}`} value={c.slug}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Course selector */}
+      <Select value={selectedCourseSlug} onValueChange={setCourse}>
+        <SelectTrigger className="w-[200px] h-8 text-sm">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {courses.map((c, idx) => (
+            <SelectItem key={`${c.slug}-${c.id}-${idx}`} value={c.slug}>
+              {c.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
-      <div className="flex items-center gap-2">
-        <div className="inline-flex rounded-md border border-border overflow-hidden">
-          <Button
-            variant={isAll ? "secondary" : "ghost"}
-            className="rounded-none cursor-pointer"
-            onClick={() => setDifficulty("all")}
-          >
-            전체
-          </Button>
-
-          <Button
-            variant="ghost"
-            className={`rounded-none cursor-pointer border-l border-border ${
-              selectedDifficulty === "easy"
-                ? `border ${difficultyButtonClass("easy")}`
-                : ""
-            }`}
-            onClick={() => setDifficulty("easy")}
-          >
-            easy
-          </Button>
-
-          <Button
-            variant="ghost"
-            className={`rounded-none cursor-pointer border-l border-border ${
-              selectedDifficulty === "medium"
-                ? `border ${difficultyButtonClass("medium")}`
-                : ""
-            }`}
-            onClick={() => setDifficulty("medium")}
-          >
-            medium
-          </Button>
-
-          <Button
-            variant="ghost"
-            className={`rounded-none cursor-pointer border-l border-border ${
-              selectedDifficulty === "project"
-                ? `border ${difficultyButtonClass("project")}`
-                : ""
-            }`}
-            onClick={() => setDifficulty("project")}
-          >
-            project
-          </Button>
-        </div>
+      {/* Difficulty filter — pill segmented control */}
+      <div className="flex items-center gap-1 p-0.5 rounded-lg bg-muted/40 border border-border/60">
+        {DIFFICULTIES.map(({ key, label, cls }) => {
+          const isActive = selectedDifficulty === key;
+          return (
+            <button
+              key={key}
+              onClick={() => setDifficulty(key)}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                isActive
+                  ? key === "all"
+                    ? "bg-card shadow-sm text-foreground border border-border/60"
+                    : `${cls} shadow-sm`
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

@@ -6,7 +6,11 @@ import { pool } from "@/lib/db";
 export const runtime = "nodejs";
 
 type Difficulty = "easy" | "medium" | "hard" | "project" | null;
-type QuestionType = "multiple_choice" | "short_answer" | "true_false";
+type QuestionType =
+  | "multiple_choice"
+  | "short_answer"
+  | "true_false"
+  | "number";
 
 type QuestionPayload = {
   questionText: string;

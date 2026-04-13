@@ -268,30 +268,34 @@ export default async function PostDetailPage({
     <div className="min-h-screen bg-background">
       <DashboardHeader user={user} />
 
-      {/* ✅ main 간격(space-y-6) 제거: 여기서 큰 간격이 쌓였음 */}
       <main className="container mx-auto px-4 py-8">
-        {/* ✅ 상단 영역: 좌측(목록/배지) + 우측(관리자 액션) */}
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="ghost" className="pl-0">
-              <Link href={`/posts?course=${post.course_slug}`}>← 목록으로</Link>
+        {/* Breadcrumb + actions bar */}
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="-ml-2 h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <Link href={`/posts?course=${post.course_slug}`}>← 목록</Link>
             </Button>
 
-            <Badge variant="secondary">{post.course_name}</Badge>
+            <span className="rounded-md bg-muted/60 px-2 py-0.5 text-xs text-muted-foreground">
+              {post.course_name}
+            </span>
 
             {shouldShowDifficulty(post.type) && post.difficulty && (
-              <Badge
-                variant="outline"
-                className={difficultyBadgeClass(
+              <span
+                className={`text-xs font-medium px-2 py-0.5 rounded-md ${difficultyBadgeClass(
                   post.difficulty === "hard" ? "project" : post.difficulty,
-                )}
+                )}`}
               >
                 {post.difficulty === "hard" ? "project" : post.difficulty}
-              </Badge>
+              </span>
             )}
           </div>
 
-          {/* 관리자: 수업내용 페이지 우측 상단에 수정/삭제 노출 */}
           {user?.user_role === "ADMIN" && post.type === "lesson" ? (
             <div className="shrink-0">
               <PostAdminActions
@@ -305,14 +309,13 @@ export default async function PostDetailPage({
           ) : null}
         </div>
 
-        <Card>
+        <Card className="border-border/60">
           <CardHeader className="pb-3">
-            <CardTitle className="text-2xl">{post.title}</CardTitle>
-            {/* ✅ 여기 마진이 “보라색” 주범이었음 */}
-            <hr className="mt-3 mb-0 border-white/10" />
+            <CardTitle className="text-2xl tracking-tight">{post.title}</CardTitle>
+            <hr className="mb-0 mt-3 border-border/40" />
 
             {post.type === "lesson" ? (
-              <div className="mt-5">
+              <div className="mt-4">
                 <AttachmentsBlock
                   title="수업 첨부파일"
                   attachments={lessonAttachments}
@@ -321,9 +324,7 @@ export default async function PostDetailPage({
             ) : null}
           </CardHeader>
 
-          {/* ✅ CardContent의 space-y-6 제거 → 필요한 곳만 mt로 제어 */}
           <CardContent className="pt-4">
-            {/* Tistory-like reading width/typography */}
             <div className="tistory-prose post-content study-richtext">
               {isHtml ? (
                 <div dangerouslySetInnerHTML={{ __html: safeHtml }} />
@@ -349,24 +350,23 @@ export default async function PostDetailPage({
             {post.type === "lesson" ? (
               <div className="mt-5 flex items-center gap-3">
                 {canGoBackToLesson ? (
-                  <Button asChild variant="secondary">
-                    <Link href={`/posts/${fromId}`}>수업내용으로</Link>
+                  <Button asChild variant="secondary" size="sm">
+                    <Link href={`/posts/${fromId}`}>← 수업내용으로</Link>
                   </Button>
                 ) : null}
               </div>
             ) : null}
 
             {post.type === "lesson" ? (
-              <div className="mt-6">
+              <div className="mt-8">
                 <div className="mx-auto max-w-[760px]">
-                  <div className="text-xs text-muted-foreground mb-2">
+                  <div className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     참조자료
                   </div>
 
-                  {/* ✅ 참조자료 박스: 있으면 카드, 없으면 안내 박스 */}
                   {refPost ? (
-                    <div className="rounded-lg border border-border bg-card p-4">
-                      <div className="font-semibold mb-3">{refPost.title}</div>
+                    <div className="rounded-xl border border-border/60 bg-card/50 p-5">
+                      <div className="mb-4 font-semibold text-foreground">{refPost.title}</div>
 
                       <div className="post-content tistory-prose study-richtext">
                         {(() => {
@@ -396,17 +396,16 @@ export default async function PostDetailPage({
                       </div>
                     </div>
                   ) : (
-                    <div className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+                    <div className="rounded-xl border border-border/40 bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
                       참조자료가 없습니다.
                     </div>
                   )}
 
-                  {/* ✅ 문제풀이 버튼: 참조자료 유무와 상관없이 quizId 있으면 표시 */}
-                  <div className="mt-3 flex justify-end">
+                  <div className="mt-4 flex justify-end">
                     {quizId ? (
                       <Button asChild>
                         <Link href={`/quiz/${quizId}?from=${postId}`}>
-                          문제풀이
+                          문제풀기 →
                         </Link>
                       </Button>
                     ) : (

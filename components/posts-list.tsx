@@ -84,8 +84,8 @@ export async function PostsList({
 
   if (!rows.length) {
     return (
-      <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
-        게시글이 없습니다.
+      <div className="rounded-xl border border-border/50 bg-card/40 px-5 py-8 text-sm text-muted-foreground text-center">
+        해당 조건의 수업이 없습니다.
       </div>
     );
   }
@@ -111,7 +111,7 @@ export async function PostsList({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {rows.map((r) => (
         <PostCardClient
           key={r.id}
@@ -122,7 +122,7 @@ export async function PostsList({
           postType={r.type}
           isAdmin={isAdmin}
           returnHref={returnHref}
-          isPassed={passedSet.has(r.id)} // ✅ 합격 표시
+          isPassed={passedSet.has(r.id)}
         />
       ))}
     </div>

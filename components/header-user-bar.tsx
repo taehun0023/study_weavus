@@ -31,17 +31,17 @@ export default function HeaderUserBar({
   const displayName =
     (user.display_name ?? "").trim() || (user.username ?? "").trim() || "User";
 
+  const isAdmin = user.user_role === "ADMIN";
+
   async function onLogout() {
     router.replace("/logout");
   }
 
-  // ✅ 드롭다운에서만 면접 과목 제거
   const filteredCourses = (courses ?? []).filter((c) => {
     const s = (c.slug ?? "").toLowerCase();
     return s !== "interview" && s !== "interviews";
   });
 
-  // 현재 선택된 과목 (posts 목록 페이지에서만 기본 선택)
   const currentCourse = (() => {
     const course = (searchParams?.get("course") ?? "").toLowerCase();
     if (!course) return "";
@@ -54,12 +54,12 @@ export default function HeaderUserBar({
   }
 
   return (
-    <div className="flex items-center gap-3 text-sm">
-      {/* ✅ 과목 드롭다운 */}
+    <nav className="flex items-center gap-1 text-sm min-w-0">
+      {/* Course selector */}
       <Select value={currentCourse || undefined} onValueChange={onCourseChange}>
         <SelectTrigger
           size="sm"
-          className="min-w-[110px]"
+          className="h-7 min-w-[100px] max-w-[130px] text-xs border-border/60"
           aria-label="과목 선택"
         >
           <SelectValue placeholder="과목" />
@@ -73,41 +73,72 @@ export default function HeaderUserBar({
         </SelectContent>
       </Select>
 
-      {/* ✅ 전 유저 노출: 프로젝트 */}
-      <Button asChild variant="secondary" size="sm" type="button">
+      {/* Common nav */}
+      <Button asChild variant="ghost" size="sm" className="h-7 px-2.5 text-xs">
         <Link href="/projects">프로젝트</Link>
       </Button>
+      <Button asChild variant="ghost" size="sm" className="h-7 px-2.5 text-xs">
+        <Link href="/interviews">면접</Link>
+      </Button>
+      <Button asChild variant="ghost" size="sm" className="h-7 px-2.5 text-xs">
+        <Link href="/japanese-writing">日本語作文</Link>
+      </Button>
 
-      {user.user_role === "ADMIN" && (
+      {/* Admin tools — amber-accented group */}
+      {isAdmin && (
         <>
-          <Button asChild variant="secondary" size="sm" type="button">
-            <Link href="/posts/new">글작성</Link>
-          </Button>
-
-          <Button asChild variant="secondary" size="sm" type="button">
-            <Link href="/admin/users/new">유저등록</Link>
-          </Button>
-
-          <Button asChild variant="secondary" size="sm" type="button">
-            <Link href="/admin/submissions">제출물</Link>
-          </Button>
+          <div className="w-px h-4 bg-border/60 mx-0.5" />
+          <div className="admin-nav-group">
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs text-amber-300/90 hover:text-amber-200 hover:bg-amber-500/15"
+            >
+              <Link href="/posts/new-set">+ 글작성</Link>
+            </Button>
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs text-amber-300/90 hover:text-amber-200 hover:bg-amber-500/15"
+            >
+              <Link href="/admin/users/new">유저등록</Link>
+            </Button>
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs text-amber-300/90 hover:text-amber-200 hover:bg-amber-500/15"
+            >
+              <Link href="/admin/submissions">제출물</Link>
+            </Button>
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs text-amber-300/90 hover:text-amber-200 hover:bg-amber-500/15"
+            >
+              <Link href="/admin/assistant">AI학습</Link>
+            </Button>
+          </div>
         </>
       )}
 
-      <Button asChild variant="secondary" size="sm" type="button">
-        <Link href="/interviews">면접</Link>
-      </Button>
+      {/* User section */}
+      <div className="w-px h-4 bg-border/60 mx-0.5" />
 
-      <Button asChild variant="ghost" size="sm" type="button">
+      <Button
+        asChild
+        variant="ghost"
+        size="sm"
+        className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+      >
         <Link
-          href={
-            user.user_role === "ADMIN"
-              ? `/admin/users/${user.id}/edit`
-              : "/account"
-          }
+          href={isAdmin ? `/admin/users/${user.id}/edit` : "/account"}
         >
-          <span className="whitespace-nowrap">
-            {displayName} ({user.username})
+          <span className="whitespace-nowrap max-w-[120px] truncate">
+            {displayName}
           </span>
         </Link>
       </Button>
@@ -116,11 +147,11 @@ export default function HeaderUserBar({
         onClick={onLogout}
         variant="outline"
         size="sm"
+        className="h-7 px-2.5 text-xs cursor-pointer border-border/60 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/40"
         type="button"
-        className="cursor-pointer"
       >
         로그아웃
       </Button>
-    </div>
+    </nav>
   );
 }
