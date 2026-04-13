@@ -65,6 +65,31 @@ function finalizeReview(args: {
   } satisfies WritingReviewResult;
 }
 
+function buildFallbackReview(args: {
+  userText: string;
+  referenceAnswer: string;
+}): WritingReviewResult {
+  const userText = String(args.userText ?? "").trim();
+  const hasJapaneseInput = containsJapaneseText(userText);
+
+  if (!hasJapaneseInput) {
+    return {
+      result: "fix",
+      userText,
+      correctedText: "日本語で書いてください。",
+      comment: "현재 입력은 일본어 문장이 아닙니다. 한국어 문제를 보고 일본어로 작성해 주세요.",
+    };
+  }
+
+  return {
+    result: "fix",
+    userText,
+    correctedText: args.referenceAnswer || userText,
+    comment:
+      "AI 첨삭 연결이 일시적으로 불안정합니다. 잠시 후 다시 시도해 주세요.",
+  };
+}
+
 export async function POST(req: Request) {
   try {
     const user = await getCurrentUser();
@@ -90,11 +115,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "userText is required" }, { status: 400 });
     }
 
-    const rawReview = await reviewJapaneseWriting({
-      level,
-      promptKo,
-      userText,
-    });
     let referenceAnswer = "";
     try {
       referenceAnswer = await generateJapaneseReferenceAnswer({
@@ -103,6 +123,21 @@ export async function POST(req: Request) {
       });
     } catch {
       referenceAnswer = "日本語で自然な文になるように、語彙と文法を見直してください。";
+    }
+
+    let rawReview: WritingReviewResult;
+    try {
+      rawReview = await reviewJapaneseWriting({
+        level,
+        promptKo,
+        userText,
+      });
+    } catch (reviewError) {
+      console.error("Failed to review japanese writing, fallback used", reviewError);
+      rawReview = buildFallbackReview({
+        userText,
+        referenceAnswer,
+      });
     }
 
     const review = finalizeReview({
