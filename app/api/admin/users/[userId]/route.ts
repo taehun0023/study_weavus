@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import bcrypt from "bcryptjs";
+import { ensureJapaneseWritingHistoryTable } from "@/lib/japanese-writing-history";
 
 export const runtime = "nodejs";
 
@@ -19,6 +20,11 @@ function normalizePassword(v: any) {
   const s = String(v ?? "");
   return s.length ? s : "";
 }
+function parseJapaneseLevel(input: unknown): "N1" | "N2" | "N3" | "N4" | "N5" | null {
+  const v = String(input ?? "").trim().toUpperCase();
+  if (v === "N1" || v === "N2" || v === "N3" || v === "N4" || v === "N5") return v;
+  return null;
+}
 
 export async function PATCH(
   req: NextRequest,
@@ -29,6 +35,7 @@ export async function PATCH(
     if (!me || me.user_role !== "ADMIN") {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await ensureJapaneseWritingHistoryTable();
 
     const { userId } = await params;
     const uid = toInt(userId);
@@ -40,6 +47,7 @@ export async function PATCH(
     const username = normalizeUsername(body?.username);
     const displayName = normalizeDisplayName(body?.displayName);
     const password = normalizePassword(body?.password);
+    const japaneseLevel = parseJapaneseLevel(body?.japaneseLevel);
 
     if (!username) {
       return NextResponse.json(
@@ -64,6 +72,13 @@ export async function PATCH(
       }
     }
 
+    if (!japaneseLevel) {
+      return NextResponse.json(
+        { error: "일본어 등급(N1~N5)을 선택해주세요." },
+        { status: 400 },
+      );
+    }
+
     const dup = await sql<{ id: number }>`
       SELECT id
       FROM public.users
@@ -84,20 +99,29 @@ export async function PATCH(
       id: number;
       username: string;
       display_name: string;
+      japanese_level: "N1" | "N2" | "N3" | "N4" | "N5";
     }>`
       UPDATE public.users
       SET username = ${username},
           display_name = ${displayName},
+          japanese_level = ${japaneseLevel},
           password_hash = COALESCE(${passwordHash}, password_hash)
       WHERE id = ${uid}
-      RETURNING id, username, display_name
+      RETURNING id, username, display_name, japanese_level
     `;
 
     if (!rows[0]) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ user: rows[0] });
+    return NextResponse.json({
+      user: {
+        id: rows[0].id,
+        username: rows[0].username,
+        display_name: rows[0].display_name,
+        japanese_level: rows[0].japanese_level,
+      },
+    });
   } catch (e) {
     console.error("Admin update user error:", e);
     return NextResponse.json(

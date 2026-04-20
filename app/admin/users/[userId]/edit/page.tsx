@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import { ensureJapaneseWritingHistoryTable } from "@/lib/japanese-writing-history";
 
 import DashboardHeader from "@/components/dashboard-header";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ export default async function AdminUserEditPage({
   const me = await getCurrentUser();
   if (!me) redirect("/login");
   if (me.user_role !== "ADMIN") redirect("/");
+  await ensureJapaneseWritingHistoryTable();
 
   const { userId } = await params;
   const uid = toInt(userId);
@@ -31,8 +33,9 @@ export default async function AdminUserEditPage({
     id: number;
     username: string;
     display_name: string | null;
+    japanese_level: "N1" | "N2" | "N3" | "N4" | "N5";
   }>`
-    SELECT id, username, display_name
+    SELECT id, username, display_name, japanese_level
     FROM public.users
     WHERE id = ${uid}
     LIMIT 1
@@ -76,6 +79,7 @@ export default async function AdminUserEditPage({
             userId={user.id}
             initialUsername={user.username}
             initialDisplayName={user.display_name ?? ""}
+            initialJapaneseLevel={user.japanese_level ?? "N3"}
           />
 
           {/* ✅ 요청: 수정란 바로 아래에 유저 삭제도 가능한 목록 */}

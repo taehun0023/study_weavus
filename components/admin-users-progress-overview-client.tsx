@@ -170,7 +170,7 @@ function DateRangePicker({
 }
 
 export default function AdminUsersProgressOverviewClient() {
-  const [course, setCourse] = useState<"java" | "react" | "database">("java");
+  const [course, setCourse] = useState<"java" | "react" | "database" | "japanese-writing">("java");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [query, setQuery] = useState("");
@@ -179,6 +179,7 @@ export default function AdminUsersProgressOverviewClient() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ApiResp | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const isWritingCourse = course === "japanese-writing";
 
   // ✅ 보기(상세) 상태
   const [selectedUsername, setSelectedUsername] = useState<string | null>(null);
@@ -290,6 +291,13 @@ export default function AdminUsersProgressOverviewClient() {
             >
               DataBase
             </Button>
+            <Button
+              variant={course === "japanese-writing" ? "secondary" : "outline"}
+              className="h-9 rounded-xl"
+              onClick={() => setCourse("japanese-writing")}
+            >
+              日本語作文
+            </Button>
           </div>
         </div>
 
@@ -328,7 +336,8 @@ export default function AdminUsersProgressOverviewClient() {
             </Button>
 
             <div className="ml-1 text-xs text-muted-foreground">
-              총 퀴즈: {data?.total ?? 0} · 유저: {data?.users?.length ?? 0}
+              {isWritingCourse ? "일일 목표" : "총 퀴즈"}: {data?.total ?? 0} · 유저:{" "}
+              {data?.users?.length ?? 0}
             </div>
           </div>
         </div>
@@ -391,10 +400,17 @@ export default function AdminUsersProgressOverviewClient() {
                   {isOpen ? (
                     <div className="px-4 pb-5">
                       <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                        <UserCourseLessonStatus
-                          userId={u.user_id}
-                          course={course}
-                        />
+                        {isWritingCourse ? (
+                          <div className="text-sm text-muted-foreground">
+                            일본어작문은 수업 단위 상세가 없으며, 사용자별 카운트만
+                            표시합니다.
+                          </div>
+                        ) : (
+                          <UserCourseLessonStatus
+                            userId={u.user_id}
+                            course={course}
+                          />
+                        )}
                       </div>
                     </div>
                   ) : null}

@@ -1,8 +1,7 @@
-import OpenAI from "openai";
-
 export type JapaneseLevel = "N1" | "N2" | "N3" | "N4" | "N5";
 
 export type GeneratedWritingPrompt = {
+  id: string;
   level: JapaneseLevel;
   promptKo: string;
   hint: string;
@@ -15,75 +14,6 @@ export type WritingReviewResult = {
   comment: string;
 };
 
-const DEFAULT_MODEL = process.env.OPENAI_JAPANESE_WRITING_MODEL || "gpt-4o-mini";
-
-let client: OpenAI | null = null;
-
-function getApiKey() {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
-  }
-  return apiKey;
-}
-
-function getClient() {
-  if (!client) {
-    client = new OpenAI({ apiKey: getApiKey() });
-  }
-  return client;
-}
-
-function extractOutputText(payload: { output_text?: string; output?: unknown[] }) {
-  const direct = String(payload.output_text ?? "").trim();
-  if (direct) return direct;
-
-  const chunks: string[] = [];
-  for (const item of payload.output ?? []) {
-    if (typeof item !== "object" || item === null) continue;
-    const content = Reflect.get(item, "content");
-    if (!Array.isArray(content)) continue;
-
-    for (const part of content) {
-      if (typeof part !== "object" || part === null) continue;
-      const text = Reflect.get(part, "text");
-      if (typeof text === "string" && text.trim()) {
-        chunks.push(text.trim());
-        continue;
-      }
-      if (typeof text === "object" && text !== null) {
-        const value = Reflect.get(text, "value");
-        if (typeof value === "string" && value.trim()) {
-          chunks.push(value.trim());
-        }
-      }
-    }
-  }
-
-  return chunks.join("\n").trim();
-}
-
-function parseJsonObject(raw: string) {
-  const text = String(raw ?? "").trim();
-  if (!text) throw new Error("Empty model response");
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    const fenced = text.match(/```json\s*([\s\S]*?)\s*```/i);
-    if (fenced?.[1]) {
-      return JSON.parse(fenced[1]);
-    }
-    const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
-    if (start >= 0 && end > start) {
-      return JSON.parse(text.slice(start, end + 1));
-    }
-  }
-
-  throw new Error("Model response is not valid JSON");
-}
-
 function normalizeLevel(v: string): JapaneseLevel {
   const value = String(v ?? "").toUpperCase().trim();
   if (value === "N1" || value === "N2" || value === "N3" || value === "N4" || value === "N5") {
@@ -92,118 +22,296 @@ function normalizeLevel(v: string): JapaneseLevel {
   throw new Error("Invalid level");
 }
 
-function normalizeGenerateResponse(
-  input: unknown,
-  level: JapaneseLevel,
-): GeneratedWritingPrompt {
-  const obj = typeof input === "object" && input !== null ? input : {};
-  const promptKo = String(Reflect.get(obj, "promptKo") ?? "").trim();
-  const hint = String(Reflect.get(obj, "hint") ?? "").trim();
-  const modelLevel = String(Reflect.get(obj, "level") ?? level).trim();
-  const normalizedLevel = normalizeLevel(modelLevel || level);
+type PromptItem = {
+  id: string;
+  promptKo: string;
+  hint: string;
+  correctedText: string;
+};
 
-  if (!promptKo) {
-    throw new Error("Invalid generate payload");
+function alignCorrectedTextWithHint(item: PromptItem): PromptItem {
+  const hint = String(item.hint ?? "");
+  let correctedText = String(item.correctedText ?? "");
+
+  // Generic rule:
+  // If hint includes explicit Japanese form like 〜xxxx (or 〜a/〜b),
+  // make sure corrected text uses the same cited form.
+  const citedForms = Array.from(
+    hint.matchAll(/〜([ぁ-んァ-ン一-龥ー]+(?:\/〜[ぁ-んァ-ン一-龥ー]+)*)/g),
+  )
+    .flatMap((m) => m[1].split("/〜"))
+    .map((v) => String(v ?? "").trim())
+    .filter(Boolean);
+
+  for (const form of citedForms) {
+    if (correctedText.includes(form)) continue;
+
+    // Common mismatch: hinted plain past form(〜た) vs polite past(〜ました).
+    if (form.endsWith("た")) {
+      const politePast = `${form.slice(0, -1)}ました`;
+      if (correctedText.includes(politePast)) {
+        correctedText = correctedText.replaceAll(politePast, form);
+      }
+    }
   }
 
   return {
-    level: normalizedLevel,
-    promptKo,
-    hint,
+    ...item,
+    correctedText,
   };
 }
 
-function fallbackPromptByLevel(
-  level: JapaneseLevel,
-  excludePrompt?: string,
-): GeneratedWritingPrompt {
-  const pool: Record<JapaneseLevel, Array<{ promptKo: string; hint: string }>> = {
-    N5: [
-      {
-        promptKo: "오늘 아침에는 늦잠을 자서 서둘러 준비한 뒤, 지각하지 않으려고 뛰어서 학교에 갔다.",
-        hint: "시간 순서와 과거형을 자연스럽게 연결해 보세요.",
-      },
-      {
-        promptKo: "저는 매일 저녁에 가족과 함께 식사하면서 하루 동안 있었던 일을 이야기하는 시간이 가장 좋다.",
-        hint: "일상 표현과 감정 표현을 함께 써보세요.",
-      },
-      {
-        promptKo: "어제는 비가 많이 와서 외출하지 못했지만, 집에서 책을 읽으며 조용하게 시간을 보냈다.",
-        hint: "역접 표현(하지만)과 행동 묘사를 넣어 보세요.",
-      },
-    ],
-    N4: [
-      {
-        promptKo: "주말에 친구와 새로 생긴 카페에 갔는데 분위기가 좋았고, 커피도 맛있어서 다음에 또 가고 싶다고 느꼈다.",
-        hint: "경험 + 감상을 한 문장 안에서 연결해 보세요.",
-      },
-      {
-        promptKo: "지난주에는 회사 일이 많아 피곤했지만, 매일 계획을 세워 끝까지 해내면서 성취감을 느꼈다.",
-        hint: "피곤했지만/해냈다 같은 대비 표현을 살려 보세요.",
-      },
-      {
-        promptKo: "저는 아침에 일찍 일어나 가볍게 운동을 하고 출근하면 하루 종일 집중이 잘되어 업무 효율이 높아진다.",
-        hint: "습관과 결과의 인과관계를 표현해 보세요.",
-      },
-    ],
-    N3: [
-      {
-        promptKo: "오늘은 해야 할 일이 많아서 피곤했지만, 미루지 않고 끝까지 해내려고 노력했다.",
-        hint: "역접(〜ものの/〜が)과 의지 표현을 자연스럽게 써보세요.",
-      },
-      {
-        promptKo: "최근에는 한국어 원문을 일본어로 바꿔 보는 연습을 하면서, 문장 구조를 더 정확하게 이해하게 되었다.",
-        hint: "변화(〜ようになった) 표현을 사용해 보세요.",
-      },
-      {
-        promptKo: "회의에서 제안한 아이디어가 바로 채택되지는 않았지만, 팀원들과 논의하는 과정에서 더 나은 방향을 찾을 수 있었다.",
-        hint: "수동/가능 표현과 과거 서술을 연결해 보세요.",
-      },
-    ],
-    N2: [
-      {
-        promptKo: "온라인 수업은 시간과 장소의 제약이 적다는 장점이 있지만, 학습 집중도와 상호작용 측면에서는 오프라인 수업이 더 효과적이라고 생각한다.",
-        hint: "장점/단점 비교 후 자신의 결론을 명확히 제시해 보세요.",
-      },
-      {
-        promptKo: "재택근무는 출퇴근 시간을 줄여 삶의 질을 높일 수 있지만, 협업 속도와 조직 소속감을 약화시킬 수 있다는 우려도 존재한다.",
-        hint: "양면성을 균형 있게 서술해 보세요.",
-      },
-      {
-        promptKo: "도시 생활은 다양한 기회와 편의시설을 제공하지만, 높은 생활비와 빠른 속도의 환경이 장기적으로 피로를 누적시키기도 한다.",
-        hint: "객관적 설명 + 개인적 평가를 함께 써보세요.",
-      },
-    ],
-    N1: [
-      {
-        promptKo: "기술 발전은 정보 접근성과 생산성을 비약적으로 향상시켰지만, 인간의 주의력 분산과 관계의 표면화를 심화시켜 사회적 신뢰 구조에 장기적 부담을 준다.",
-        hint: "추상 개념을 인과 구조로 논리적으로 전개해 보세요.",
-      },
-      {
-        promptKo: "개인의 자유는 민주사회의 핵심 가치이지만, 공동체의 안전과 지속 가능성을 유지하기 위해서는 일정 수준의 제도적 규범과 사회적 책임이 병행되어야 한다.",
-        hint: "양립 관계를 접속 표현으로 정교하게 묶어 보세요.",
-      },
-      {
-        promptKo: "AI 시대에 인간의 고유한 역량은 단순 계산 능력이 아니라 맥락 판단, 윤리적 숙고, 그리고 불확실성 속에서 의미를 구성하는 해석 능력이라고 본다.",
-        hint: "개념 정의 후 근거를 제시하는 논증 구조를 사용해 보세요.",
-      },
-    ],
-  };
+type Segment = { kr: string; ja: string };
 
-  const trimmedExclude = String(excludePrompt ?? "").trim();
-  const source = pool[level] ?? pool.N3;
+function buildPromptSet(args: {
+  level: JapaneseLevel;
+  openings: Segment[];
+  endings: Segment[];
+  hints: string[];
+  limit?: number;
+}) {
+  const limit = args.limit ?? 60;
+  const result: PromptItem[] = [];
+  let seq = 1;
+
+  for (const opening of args.openings) {
+    for (const ending of args.endings) {
+      if (result.length >= limit) break;
+      const hint = args.hints[result.length % args.hints.length] ?? "";
+      result.push({
+        id: `${args.level}-${String(seq).padStart(3, "0")}`,
+        promptKo: `${opening.kr} ${ending.kr}`,
+        hint,
+        correctedText: `${opening.ja}${ending.ja}`,
+      });
+      seq += 1;
+    }
+    if (result.length >= limit) break;
+  }
+
+  return result;
+}
+
+function buildN5Prompts() {
+  return buildPromptSet({
+    level: "N5",
+    openings: [
+      { kr: "오늘 아침에는", ja: "今朝は" },
+      { kr: "어제 저녁에는", ja: "昨日の夕方は" },
+      { kr: "학교가 끝난 뒤에는", ja: "学校が終わったあと" },
+      { kr: "주말에는", ja: "週末は" },
+      { kr: "비가 오던 날에는", ja: "雨の日は" },
+      { kr: "시간이 날 때마다", ja: "時間があるたびに" },
+      { kr: "집에 돌아오면", ja: "家に帰ると" },
+      { kr: "점심시간에는", ja: "昼休みには" },
+      { kr: "시험이 끝난 날에는", ja: "試験が終わった日は" },
+      { kr: "친구를 만나는 날에는", ja: "友達に会う日は" },
+      { kr: "월요일 아침에는", ja: "月曜日の朝は" },
+      { kr: "피곤한 날에는", ja: "疲れた日は" },
+    ],
+    endings: [
+      { kr: "도서관에서 숙제를 하고 집에 천천히 돌아갔다.", ja: "図書館で宿題をしてから、ゆっくり家に帰りました。" },
+      { kr: "친구와 공원을 산책하고 근처 가게에서 빵을 샀다.", ja: "友達と公園を散歩して、近くの店でパンを買いました。" },
+      { kr: "가족과 저녁을 먹고 하루 있었던 일을 이야기했다.", ja: "家族と夕飯を食べながら、その日の出来事を話しました。" },
+      { kr: "방을 정리한 다음 음악을 들으며 쉬었다.", ja: "部屋を片づけたあと、音楽を聞きながら休みました。" },
+      { kr: "버스를 놓치지 않으려고 서둘러 준비했다.", ja: "バスに遅れないように、急いで準備しました。" },
+      { kr: "집에서 책을 읽으며 조용하게 시간을 보냈다.", ja: "家で本を読みながら、静かに時間を過ごしました。" },
+    ],
+    hints: [
+      "시간 순서(먼저/다음)를 자연스럽게 표현해 보세요.",
+      "일상 동작을 과거형으로 연결해 보세요.",
+      "〜ながら에 해당하는 동시 동작 표현을 의식해 보세요.",
+      "이유와 목적 표현을 한 문장에 담아 보세요.",
+    ],
+  });
+}
+
+function buildN4Prompts() {
+  return buildPromptSet({
+    level: "N4",
+    openings: [
+      { kr: "지난주에는 일이 많아서 바빴지만,", ja: "先週は仕事が多くて忙しかったですが、" },
+      { kr: "주말에 새로 생긴 카페에 갔는데,", ja: "週末に新しくできたカフェへ行ったところ、" },
+      { kr: "아침에 일찍 일어나 운동을 하면,", ja: "朝早く起きて運動をすると、" },
+      { kr: "처음에는 일본어가 어려웠지만,", ja: "最初は日本語が難しかったものの、" },
+      { kr: "요즘은 통학 시간이 길어서,", ja: "最近は通学時間が長いため、" },
+      { kr: "회의 준비를 하느라 늦게까지 남았지만,", ja: "会議の準備で遅くまで残りましたが、" },
+      { kr: "친구와 같이 공부하면,", ja: "友達と一緒に勉強すると、" },
+      { kr: "비가 와서 외출하기 어려웠지만,", ja: "雨で外出しにくかったですが、" },
+      { kr: "새로운 취미를 시작한 뒤로,", ja: "新しい趣味を始めてから、" },
+      { kr: "회사에서 맡은 일이 늘어났지만,", ja: "会社で任される仕事が増えましたが、" },
+      { kr: "여행을 다녀온 후에는,", ja: "旅行から戻ったあとは、" },
+      { kr: "시험을 준비하는 동안,", ja: "試験を準備している間は、" },
+    ],
+    endings: [
+      { kr: "매일 계획을 세워서 하나씩 끝내니 성취감을 느꼈다.", ja: "毎日計画を立てて一つずつ終えることで、達成感を覚えました。" },
+      { kr: "분위기가 좋아서 다음에도 다시 가고 싶다고 생각했다.", ja: "雰囲気がよく、次もまた行きたいと思いました。" },
+      { kr: "하루 종일 집중이 잘되어 업무 효율이 높아졌다.", ja: "一日中集中しやすくなり、仕事の効率が上がりました。" },
+      { kr: "실수를 줄이기 위해 메모하는 습관을 들이게 되었다.", ja: "ミスを減らすために、メモを取る習慣が身につきました。" },
+      { kr: "쉬는 시간을 잘 활용하니 피로가 훨씬 줄었다.", ja: "休憩時間をうまく使うことで、疲れがかなり減りました。" },
+      { kr: "주변의 도움을 받아 마감 전에 무사히 끝낼 수 있었다.", ja: "周囲の助けを受けて、締め切り前に無事終えることができました。" },
+    ],
+    hints: [
+      "원인과 결과를 자연스럽게 연결해 보세요.",
+      "감상(〜と思う)에 해당하는 마무리를 의식해 보세요.",
+      "대비 표현(〜지만/〜が)을 부드럽게 사용해 보세요.",
+      "습관/변화 표현을 문장 후반에 넣어 보세요.",
+    ],
+  });
+}
+
+function buildN3Prompts() {
+  return buildPromptSet({
+    level: "N3",
+    openings: [
+      { kr: "오늘은 해야 할 일이 많아서 피곤했지만,", ja: "今日はやるべきことが多くて疲れていたものの、" },
+      { kr: "처음 제안은 바로 받아들여지지 않았지만,", ja: "最初の提案はすぐには受け入れられませんでしたが、" },
+      { kr: "최근에는 한국어 원문을 일본어로 바꾸는 연습을 하면서,", ja: "最近は韓国語の原文を日本語に変換する練習を続けるうちに、" },
+      { kr: "회의에서 다양한 의견이 나왔고,", ja: "会議ではさまざまな意見が出て、" },
+      { kr: "발표를 준비하는 과정에서,", ja: "発表を準備する過程で、" },
+      { kr: "새로운 환경에 적응하는 동안,", ja: "新しい環境に適応する間に、" },
+      { kr: "실패를 반복하면서도,", ja: "失敗を繰り返しながらも、" },
+      { kr: "처음에는 말이 잘 나오지 않았지만,", ja: "最初は言葉がうまく出ませんでしたが、" },
+      { kr: "팀원들과 역할을 나누어 진행하니,", ja: "チームメンバーと役割を分担して進めると、" },
+      { kr: "문장을 직접 써 보고 고쳐 보는 훈련을 통해,", ja: "文を自分で書いて直す訓練を通じて、" },
+      { kr: "어려운 과제를 맡게 되었지만,", ja: "難しい課題を任されましたが、" },
+      { kr: "피드백을 받은 뒤에는,", ja: "フィードバックを受けたあとは、" },
+    ],
+    endings: [
+      { kr: "미루지 않고 끝까지 해내려고 노력했다.", ja: "後回しにせず最後までやり遂げようと努力した。" },
+      { kr: "논의하는 과정에서 더 나은 방향을 찾을 수 있었다.", ja: "議論する中で、よりよい方向性を見つけることができた。" },
+      { kr: "문장 구조를 이전보다 정확하게 이해할 수 있게 되었다.", ja: "文の構造を以前より正確に理解できるようになった。" },
+      { kr: "작은 습관을 바꾸는 것만으로도 결과가 크게 달라졌다.", ja: "小さな習慣を変えるだけでも、結果が大きく変わった。" },
+      { kr: "부족한 부분을 확인하고 다음 시도에 반영할 수 있었다.", ja: "不足している点を確認し、次の試行に反映できた。" },
+      { kr: "시간은 걸렸지만 결국 목표를 달성할 수 있었다.", ja: "時間はかかったが、最終的に目標を達成できた。" },
+    ],
+    hints: [
+      "역접과 결과를 한 문장 안에서 정리해 보세요.",
+      "가능/변화 표현을 자연스럽게 활용해 보세요.",
+      "과정 설명 뒤에 결론을 명확히 제시해 보세요.",
+      "원인-행동-결과 흐름을 유지해 보세요.",
+    ],
+  });
+}
+
+function buildN2Prompts() {
+  return buildPromptSet({
+    level: "N2",
+    openings: [
+      { kr: "온라인 수업은 접근성이 높다는 장점이 있지만,", ja: "オンライン授業にはアクセス性が高いという利点がある一方で、" },
+      { kr: "재택근무는 통근 부담을 줄여 주지만,", ja: "在宅勤務は通勤負担を軽減する反面、" },
+      { kr: "도시 생활은 기회가 많다는 점에서 매력적이지만,", ja: "都市生活は機会が多い点で魅力的ですが、" },
+      { kr: "성과 중심의 문화는 효율을 높일 수 있지만,", ja: "成果重視の文化は効率を高めうるものの、" },
+      { kr: "새로운 기술 도입은 생산성을 높여 주지만,", ja: "新技術の導入は生産性を向上させますが、" },
+      { kr: "조직의 규칙을 강화하면 혼란은 줄일 수 있지만,", ja: "組織の規則を強化すれば混乱を減らせますが、" },
+      { kr: "개인의 자율성을 존중하는 정책은 긍정적이지만,", ja: "個人の自律性を尊重する方針は前向きですが、" },
+      { kr: "빠른 의사결정은 경쟁력 확보에 유리하지만,", ja: "迅速な意思決定は競争力の確保に有利ですが、" },
+      { kr: "국제 협업은 다양한 관점을 얻는 데 도움이 되지만,", ja: "国際協働は多様な視点を得るうえで有益ですが、" },
+      { kr: "데이터 기반 의사결정은 객관성을 보장하지만,", ja: "データに基づく意思決定は客観性を担保しますが、" },
+      { kr: "평등한 기회 제공은 사회적으로 중요하지만,", ja: "機会の平等を提供することは社会的に重要ですが、" },
+      { kr: "고객 중심 전략은 만족도를 높일 수 있지만,", ja: "顧客中心の戦略は満足度を高められる一方で、" },
+    ],
+    endings: [
+      { kr: "집중도와 상호작용 측면에서는 보완 장치가 필요하다고 본다.", ja: "集中度と相互作用の面では補完的な仕組みが必要だと考える。" },
+      { kr: "협업 속도와 소속감을 유지하기 위한 제도 설계가 함께 요구된다.", ja: "協働の速度と帰属意識を維持するための制度設計も同時に求められる。" },
+      { kr: "단기 효율만이 아니라 장기 지속 가능성까지 함께 고려해야 한다.", ja: "短期的効率だけでなく、長期的持続可能性まで含めて検討すべきである。" },
+      { kr: "장점과 한계를 균형 있게 평가해야 실질적인 개선이 가능하다.", ja: "利点と限界を均衡的に評価してこそ、実質的な改善が可能になる。" },
+      { kr: "정책 실행 단계에서 예상치 못한 부작용을 점검하는 절차가 중요하다.", ja: "施策の実行段階では、想定外の副作用を点検する手続きが重要になる。" },
+      { kr: "결국 핵심은 상황별 우선순위를 명확히 설정하는 데 있다고 생각한다.", ja: "結局のところ、要点は状況ごとの優先順位を明確に設定することにあると思う。" },
+    ],
+    hints: [
+      "장단점 비교 후 결론을 분명히 제시해 보세요.",
+      "반면/한편에 해당하는 대조 구조를 살려 보세요.",
+      "객관적 설명과 개인 판단을 균형 있게 연결해 보세요.",
+      "문장 후반에서 정책적 시사점을 정리해 보세요.",
+    ],
+  });
+}
+
+function buildN1Prompts() {
+  return buildPromptSet({
+    level: "N1",
+    openings: [
+      { kr: "기술의 고도화는 생산성과 접근성을 비약적으로 확장했지만,", ja: "技術の高度化は生産性とアクセス性を飛躍的に拡張した一方で、" },
+      { kr: "개인의 자유는 민주사회에서 절대적으로 중요하지만,", ja: "個人の自由は民主社会において決定的に重要であるものの、" },
+      { kr: "효율성을 최우선으로 삼는 운영 방식은 단기 성과에 유리하지만,", ja: "効率性を最優先とする運営方式は短期的成果に有利である反面、" },
+      { kr: "알고리즘 기반 추천 시스템은 편의성을 높여 주지만,", ja: "アルゴリズム型推薦システムは利便性を高めるが、" },
+      { kr: "세계화는 시장과 지식의 경계를 허물었지만,", ja: "グローバル化は市場と知識の境界を解体した一方で、" },
+      { kr: "위기 상황에서의 신속한 통제는 피해를 줄일 수 있지만,", ja: "危機局面における迅速な統制は被害の抑制に資するが、" },
+      { kr: "공정성을 제도적으로 보장하려는 시도는 필수적이지만,", ja: "公正性を制度的に担保しようとする試みは不可欠であるが、" },
+      { kr: "지속 가능한 발전을 강조하는 담론은 설득력이 있지만,", ja: "持続可能な発展を強調する言説には説得力があるものの、" },
+      { kr: "전문성의 세분화는 정밀한 분석을 가능하게 했지만,", ja: "専門性の細分化は精密な分析を可能にした反面、" },
+      { kr: "인공지능의 보편화는 의사결정 비용을 낮추지만,", ja: "AIの普及は意思決定コストを低下させる一方で、" },
+      { kr: "사회적 신뢰는 제도의 안정성을 떠받치는 핵심 자원이지만,", ja: "社会的信頼は制度の安定性を支える中核資源であるが、" },
+      { kr: "다원적 가치가 공존하는 사회는 창의성을 촉진하지만,", ja: "多元的価値が共存する社会は創造性を促進する反面、" },
+    ],
+    endings: [
+      { kr: "동시에 인간의 판단과 책임 소재를 흐릴 위험을 구조적으로 내포하고 있다.", ja: "同時に人間の判断と責任所在を曖昧化する危険を構造的に内包しているといえる。" },
+      { kr: "따라서 제도 설계는 권리 보장과 공적 책임의 긴장을 정교하게 조율해야 한다.", ja: "したがって制度設計は、権利保障と公的責任の緊張関係を精緻に調整しなければならない。" },
+      { kr: "문제의 본질은 기술 자체가 아니라 그것을 배치하는 사회적 맥락에 달려 있다.", ja: "問題の本質は技術それ自体ではなく、それを配置する社会的文脈に依存している。" },
+      { kr: "결국 규범의 정당성은 선언이 아니라 지속적인 검증 절차를 통해서만 확보된다.", ja: "結局のところ規範の正当性は宣言によってではなく、継続的検証手続きによってのみ確保される。" },
+      { kr: "이 때문에 단일한 해법보다 상황별 다층 전략이 현실적인 대안으로 기능한다.", ja: "このため単一解ではなく、状況依存的な多層戦略こそが現実的代案として機能する。" },
+      { kr: "장기적으로는 효율과 형평의 균형을 어떻게 제도화하느냐가 성패를 가른다.", ja: "長期的には効率と衡平性の均衡をいかに制度化するかが成否を分ける。" },
+    ],
+    hints: [
+      "추상 개념을 인과 구조로 논리적으로 전개해 보세요.",
+      "대립 가치의 긴장을 조정하는 논지를 분명히 제시해 보세요.",
+      "문제 제기 이후 규범적 결론으로 연결해 보세요.",
+      "단기/장기 관점을 대비해 논증을 완성해 보세요.",
+    ],
+  });
+}
+
+const PROMPT_BANK: Record<JapaneseLevel, PromptItem[]> = {
+  N1: buildN1Prompts(),
+  N2: buildN2Prompts(),
+  N3: buildN3Prompts(),
+  N4: buildN4Prompts(),
+  N5: buildN5Prompts(),
+};
+
+function pickRandomPrompt(args: {
+  level: JapaneseLevel;
+  excludePrompt?: string;
+  excludeId?: string;
+  excludeIds?: string[];
+}) {
+  const source = PROMPT_BANK[args.level] ?? PROMPT_BANK.N3;
+  const trimmedExclude = String(args.excludePrompt ?? "").trim();
+  const excludeId = String(args.excludeId ?? "").trim();
+  const excludeIds = new Set(
+    (args.excludeIds ?? []).map((v) => String(v ?? "").trim()).filter(Boolean),
+  );
+  if (excludeId) excludeIds.add(excludeId);
   const candidates =
-    trimmedExclude.length > 0
-      ? source.filter((c) => c.promptKo.trim() !== trimmedExclude)
+    trimmedExclude.length > 0 || excludeIds.size > 0
+      ? source.filter(
+          (c) =>
+            c.promptKo.trim() !== trimmedExclude &&
+            !excludeIds.has(c.id.trim()),
+        )
       : source;
-  const finalCandidates = candidates.length > 0 ? candidates : source;
+  const finalCandidates = candidates.length > 0 ? candidates : [];
+  if (finalCandidates.length === 0) return null;
   const idx = Math.floor(Math.random() * finalCandidates.length);
-  const picked = finalCandidates[idx];
-  return {
-    level,
-    promptKo: picked.promptKo,
-    hint: picked.hint,
-  };
+  return alignCorrectedTextWithHint(finalCandidates[idx]);
+}
+
+function findPrompt(args: {
+  level: JapaneseLevel;
+  promptKo: string;
+  promptId?: string;
+}) {
+  const list = PROMPT_BANK[args.level] ?? PROMPT_BANK.N3;
+  const promptId = String(args.promptId ?? "").trim();
+  if (promptId) {
+    const byId = list.find((item) => item.id === promptId);
+    if (byId) return alignCorrectedTextWithHint(byId);
+  }
+  const promptKo = String(args.promptKo ?? "").trim();
+  if (!promptKo) return null;
+  const found = list.find((item) => item.promptKo.trim() === promptKo) ?? null;
+  return found ? alignCorrectedTextWithHint(found) : null;
 }
 
 function isGenericCorrectedText(text: string) {
@@ -252,177 +360,97 @@ export function enforceCorrectedText(args: {
   return review;
 }
 
-function normalizeReviewResponse(
-  input: unknown,
-  userText: string,
-): WritingReviewResult {
-  const obj = typeof input === "object" && input !== null ? input : {};
-  const rawResult = String(Reflect.get(obj, "result") ?? "").trim().toLowerCase();
-  const comment = String(Reflect.get(obj, "comment") ?? "").trim();
-  const echoedUserText = String(Reflect.get(obj, "userText") ?? userText).trim() || userText;
-  const correctedText = String(Reflect.get(obj, "correctedText") ?? userText).trim() || userText;
-  const result: "ok" | "fix" = rawResult === "ok" || rawResult === "fix" ? rawResult : "fix";
-
-  return {
-    result,
-    userText: echoedUserText,
-    correctedText,
-    comment:
-      comment ||
-      (result === "ok" ? "自然で正しい表現です。" : "문장을 더 자연스럽게 다듬어 보세요."),
-  };
-}
-
 export function containsJapaneseText(input: string) {
   const text = String(input ?? "");
   return /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/.test(text);
 }
 
-async function askForJson(systemPrompt: string, userPrompt: string) {
-  const response = await getClient().responses.create({
-    model: DEFAULT_MODEL,
-    input: [
-      {
-        role: "system",
-        content: [{ type: "input_text", text: systemPrompt }],
-      },
-      {
-        role: "user",
-        content: [{ type: "input_text", text: userPrompt }],
-      },
-    ],
-  });
-
-  return extractOutputText({
-    output_text: response.output_text,
-    output: response.output,
-  });
-}
-
 export async function generateJapaneseWritingPrompt(args: {
   level: JapaneseLevel;
   excludePrompt?: string;
+  excludeId?: string;
+  excludeIds?: string[];
 }) {
   const normalizedLevel = normalizeLevel(args.level);
-  const excludePrompt = String(args.excludePrompt ?? "").trim();
-
-  const systemPrompt = [
-    "Generate one Korean source sentence for Korean-to-Japanese translation writing practice.",
-    "Conditions:",
-    "- Level: N1 ~ N5",
-    "- Return a declarative Korean sentence, not a question or instruction.",
-    "- N5: simple daily sentence, around 25~40 Korean chars.",
-    "- N4: daily sentence with one connector, around 35~55 chars.",
-    "- N3: slightly longer sentence with reason/contrast, around 45~75 chars.",
-    "- N2: opinion/comparison sentence, around 55~90 chars.",
-    "- N1: abstract/logical sentence, around 70~120 chars.",
-    "Return JSON only:",
-    '{ "level": "N3", "promptKo": "...", "hint": "..." }',
-    "No text outside JSON.",
-  ].join("\n");
-
-  const userPrompt = [
-    `level: ${normalizedLevel}`,
-    "promptKo must be a Korean source sentence to translate into Japanese.",
-    "Do not include any question marks.",
-    "Hint should be short, practical, and also in Korean.",
-    excludePrompt ? `Do not repeat this exact sentence: ${excludePrompt}` : "",
-    `nonce: ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    "Avoid repeating the same prompt as previous response.",
-  ]
-    .filter(Boolean)
-    .join("\n");
-  try {
-    const raw = await askForJson(systemPrompt, userPrompt);
-    const parsed = parseJsonObject(raw);
-    const generated = normalizeGenerateResponse(parsed, normalizedLevel);
-    if (excludePrompt && generated.promptKo.trim() === excludePrompt) {
-      return fallbackPromptByLevel(normalizedLevel, excludePrompt);
-    }
-    return generated;
-  } catch {
-    // Fallback for missing OpenAI key / provider errors / invalid JSON output.
-    return fallbackPromptByLevel(normalizedLevel, excludePrompt);
+  const picked = pickRandomPrompt({
+    level: normalizedLevel,
+    excludePrompt: args.excludePrompt,
+    excludeId: args.excludeId,
+    excludeIds: args.excludeIds,
+  });
+  if (!picked) {
+    throw new Error("해당 레벨의 모든 문장을 완료했습니다.");
   }
+  return {
+    id: picked.id,
+    level: normalizedLevel,
+    promptKo: picked.promptKo,
+    hint: picked.hint,
+  } satisfies GeneratedWritingPrompt;
 }
 
 export async function reviewJapaneseWriting(args: {
   level: JapaneseLevel;
   promptKo: string;
   userText: string;
-}) {
+  promptId?: string;
+}): Promise<WritingReviewResult> {
   const normalizedLevel = normalizeLevel(args.level);
   const promptKo = String(args.promptKo ?? "").trim();
   const userText = String(args.userText ?? "").trim();
 
   if (!promptKo) throw new Error("promptKo is required");
   if (!userText) throw new Error("userText is required");
+  const source = findPrompt({
+    level: normalizedLevel,
+    promptKo,
+    promptId: args.promptId,
+  });
+  const correctedText =
+    source?.correctedText ||
+    "模範解答が見つかりませんでした。問題を再生成してもう一度お試しください。";
 
-  const systemPrompt = [
-    "Evaluate the user's Japanese writing based on the Korean prompt.",
-    "Review criteria:",
-    "- Grammar",
-    "- Particles",
-    "- Natural expression",
-    "- Vocabulary",
-    "- Sentence flow",
-    "Do NOT compare exact match. Evaluate correctness and naturalness.",
-    "Return JSON only:",
-    '{',
-    '  "result": "ok" or "fix",',
-    '  "userText": "...",',
-    '  "correctedText": "...",',
-    '  "comment": "..."',
-    '}',
-    "No explanation outside JSON.",
-  ].join("\n");
+  if (!containsJapaneseText(userText)) {
+    return {
+      result: "fix",
+      userText,
+      correctedText,
+      comment: "일본어로 작성해 주세요. 현재 입력은 일본어 문장이 아닙니다.",
+    };
+  }
 
-  const userPrompt = [
-    `level: ${normalizedLevel}`,
-    `promptKo: ${promptKo}`,
-    `userText: ${userText}`,
-  ].join("\n");
+  const exactMatch = userText === correctedText;
+  if (exactMatch) {
+    return {
+      result: "ok",
+      userText,
+      correctedText,
+      comment: "自然で正しい表現です。よくできました。",
+    };
+  }
 
-  const raw = await askForJson(systemPrompt, userPrompt);
-  const parsed = parseJsonObject(raw);
-  return normalizeReviewResponse(parsed, userText);
+  return {
+    result: "fix",
+    userText,
+    correctedText,
+    comment: "모범 답안과 표현/문법/조사 사용이 달라 수정 예시를 확인해 주세요.",
+  };
 }
 
 export async function generateJapaneseReferenceAnswer(args: {
   level: JapaneseLevel;
   promptKo: string;
+  promptId?: string;
 }) {
   const normalizedLevel = normalizeLevel(args.level);
   const promptKo = String(args.promptKo ?? "").trim();
-  if (!promptKo) throw new Error("promptKo is required");
-
-  const systemPrompt = [
-    "Create one model Japanese answer for the Korean writing prompt.",
-    "Requirements:",
-    "- Natural Japanese",
-    "- Level appropriate",
-    "- One concise answer",
-    "Return JSON only:",
-    '{ "correctedText": "..." }',
-    "No text outside JSON.",
-  ].join("\n");
-
-  const userPrompt = [
-    `level: ${normalizedLevel}`,
-    `promptKo: ${promptKo}`,
-  ].join("\n");
-
-  const raw = await askForJson(systemPrompt, userPrompt);
-  const parsed = parseJsonObject(raw);
-  const correctedText = String(
-    (typeof parsed === "object" && parsed !== null
-      ? Reflect.get(parsed, "correctedText")
-      : "") ?? "",
-  ).trim();
-
-  if (!correctedText) {
-    throw new Error("Invalid correctedText from model answer generator");
+  const source = findPrompt({
+    level: normalizedLevel,
+    promptKo,
+    promptId: args.promptId,
+  });
+  if (!source) {
+    throw new Error("Reference answer not found");
   }
-
-  return correctedText;
+  return source.correctedText;
 }

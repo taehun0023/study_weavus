@@ -4,6 +4,7 @@ import {
   generateJapaneseWritingPrompt,
   type JapaneseLevel,
 } from "@/lib/japanese-writing-ai";
+import { getSolvedPromptIdsByLevel } from "@/lib/japanese-writing-history";
 
 export const runtime = "nodejs";
 
@@ -25,6 +26,7 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => null)) as {
       level?: string;
       excludePrompt?: string;
+      excludeId?: string;
     } | null;
     const level = parseLevel(body?.level);
     if (!level) {
@@ -34,6 +36,11 @@ export async function POST(req: Request) {
     const generated = await generateJapaneseWritingPrompt({
       level,
       excludePrompt: String(body?.excludePrompt ?? "").trim(),
+      excludeId: String(body?.excludeId ?? "").trim(),
+      excludeIds: await getSolvedPromptIdsByLevel({
+        userId: user.id,
+        level,
+      }),
     });
     return NextResponse.json(generated);
   } catch (error) {

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { sql } from "@/lib/db";
 import { listCourses } from "@/lib/courses";
 import { Progress } from "@/components/ui/progress";
-import { Coffee, Database, Network, Code, BookOpen, PenSquare } from "lucide-react";
+import { Coffee, Database, Network, Code, BookOpen, PenSquare, Mic } from "lucide-react";
 
 interface CourseCardsProps {
   userId: number;
@@ -49,6 +49,12 @@ const writingAccent = {
   gradient: "from-emerald-500/10 to-teal-500/5",
   iconColor: "text-emerald-300",
   iconBg: "bg-emerald-500/15 border border-emerald-500/25",
+};
+
+const speakingAccent = {
+  gradient: "from-cyan-500/10 to-blue-500/5",
+  iconColor: "text-cyan-300",
+  iconBg: "bg-cyan-500/15 border border-cyan-500/25",
 };
 
 export async function CourseCards({ userId, userRole }: CourseCardsProps) {
@@ -106,6 +112,34 @@ export async function CourseCards({ userId, userRole }: CourseCardsProps) {
               <div className="flex justify-between items-center text-xs text-muted-foreground">
                 <span>연습 유형</span>
                 <span className="font-medium text-foreground">AI 作文レビュー</span>
+              </div>
+              <Progress value={100} className="h-1.5" />
+            </div>
+          </div>
+        </Link>
+
+        <Link href="/japanese-speaking">
+          <div
+            className={`relative rounded-xl border border-border/60 bg-gradient-to-br ${speakingAccent.gradient} bg-card p-5 cursor-pointer transition-all duration-200 hover:border-border hover:shadow-lg hover:shadow-black/20 hover:-translate-y-0.5 h-full flex flex-col gap-4`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-lg ${speakingAccent.iconBg}`}>
+                <Mic className={`h-5 w-5 ${speakingAccent.iconColor}`} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold text-foreground leading-tight">
+                  日本語音声評価
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5 truncate">
+                  녹음 파일 업로드 기반 발음/억양/문법/자연스러움 평가
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center text-xs text-muted-foreground">
+                <span>연습 유형</span>
+                <span className="font-medium text-foreground">AI 音声レビュー</span>
               </div>
               <Progress value={100} className="h-1.5" />
             </div>

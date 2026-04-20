@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import DashboardHeader from "@/components/dashboard-header";
 import UserProfileForm from "./user-profile-form";
+import JapaneseWritingOkTab from "./japanese-writing-ok-tab";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default async function AccountPage() {
   const user = await getCurrentUser();
@@ -19,10 +21,21 @@ export default async function AccountPage() {
             </p>
           </div>
 
-          <UserProfileForm
-            initialUsername={user.username}
-            initialDisplayName={user.display_name ?? ""}
-          />
+          <Tabs defaultValue="profile" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="profile">프로필</TabsTrigger>
+              <TabsTrigger value="japanese-writing">일본어작문</TabsTrigger>
+            </TabsList>
+            <TabsContent value="profile">
+              <UserProfileForm
+                initialUsername={user.username}
+                initialDisplayName={user.display_name ?? ""}
+              />
+            </TabsContent>
+            <TabsContent value="japanese-writing">
+              <JapaneseWritingOkTab />
+            </TabsContent>
+          </Tabs>
         </div>
       </main>
     </div>

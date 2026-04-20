@@ -17,6 +17,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const PDF_PARSE_MODEL = process.env.OPENAI_PDF_PARSE_MODEL || "gpt-4o-mini";
 const OCR_PARSE_MODEL = process.env.OPENAI_VISION_MODEL || "gpt-4o";
+const MIN_EXTRACT_LENGTH = 120;
+const MIN_GOOGLE_PAGE_LENGTH = 120;
 
 function decodeHtmlEntities(input: string) {
   return input
@@ -275,6 +277,7 @@ async function crawlSubpages(startUrl: string, maxPages = 12) {
     visited.add(current);
 
     let text = "";
+    let pageTitle = "";
     try {
       text = await fetchGoogleSiteWithJina(current);
     } catch (e: any) {
@@ -285,17 +288,22 @@ async function crawlSubpages(startUrl: string, maxPages = 12) {
         sourceRef: current,
         message: String(e?.message ?? "본문 추출 실패"),
       });
-      if (current === root.toString()) throw new Error("본문 추출 실패");
-      continue;
+      const rendered = await extractTextFromUrlWithPlaywright(current);
+      if (!rendered?.text) {
+        if (current === root.toString()) throw new Error("본문 추출 실패");
+        continue;
+      }
+      text = rendered.text;
+      pageTitle = rendered.title || "";
     }
 
     const sourceUrl = new URL(current);
     const ocrSuffix = await extractGoogleImageOcrFromText(text, sourceUrl);
     const merged = withScheduleSection(removeGoogleSitesNoise(`${text}${ocrSuffix}`));
-    if (merged.length >= 500) {
+    if (merged.length >= MIN_GOOGLE_PAGE_LENGTH) {
       pages.push({
         url: current,
-        title: inferGoogleDocTitle(current, text),
+        title: pageTitle || inferGoogleDocTitle(current, text),
         text: merged,
         mime: "text/markdown",
       });
@@ -689,6 +697,29 @@ async function extractTextFromUrlWithPlaywright(url: string) {
             sourceRef: url,
             message: String(e?.message ?? "screenshot structured extraction failed"),
           });
+        }
+      }
+
+      const html = await page.content().catch(() => "");
+      if (html) {
+        const base = new URL(url);
+        const assetUrls = extractAssetUrlsFromHtml(html, base, 10);
+        for (const assetUrl of assetUrls.slice(0, 6)) {
+          try {
+            const asset = await downloadAssetAsBuffer(assetUrl);
+            if (!asset) continue;
+            if (!asset.mime.startsWith("image/")) continue;
+            const ocr = await extractStructuredVisionText(asset.data, asset.mime);
+            if (ocr.trim()) chunks.push(ocr.trim());
+          } catch (e: any) {
+            await logIngestionEvent({
+              level: "WARN",
+              stage: "url.playwright.asset_ocr",
+              sourceType: "url",
+              sourceRef: assetUrl,
+              message: String(e?.message ?? "asset OCR failed"),
+            });
+          }
         }
       }
 
@@ -1134,7 +1165,7 @@ export async function POST(req: NextRequest) {
         }
         for (const page of pages) {
           const extractedText = compactText(page.text);
-          if (extractedText.length < 500) continue;
+        if (extractedText.length < MIN_GOOGLE_PAGE_LENGTH) continue;
           const canonicalPageUrl = canonicalizeUrl(page.url);
           const metadata = {
             sourceType: "url",
@@ -1195,7 +1226,7 @@ export async function POST(req: NextRequest) {
       } else {
         const extracted = await extractTextFromUrl(rawUrl);
         const extractedText = compactText(extracted.text);
-        if (extractedText.length < 500) {
+        if (extractedText.length < MIN_EXTRACT_LENGTH) {
           await logIngestionEvent({
             level: "ERROR",
             stage: "url.ingested_too_short",

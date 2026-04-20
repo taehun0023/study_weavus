@@ -11,14 +11,19 @@ export default function AdminUserEditForm({
   userId,
   initialUsername,
   initialDisplayName,
+  initialJapaneseLevel,
 }: {
   userId: number;
   initialUsername: string;
   initialDisplayName: string;
+  initialJapaneseLevel: "N1" | "N2" | "N3" | "N4" | "N5";
 }) {
   const router = useRouter();
   const [username, setUsername] = useState(initialUsername ?? "");
   const [displayName, setDisplayName] = useState(initialDisplayName ?? "");
+  const [japaneseLevel, setJapaneseLevel] = useState<"N1" | "N2" | "N3" | "N4" | "N5">(
+    initialJapaneseLevel ?? "N3",
+  );
 
   // ✅ 추가: 비밀번호 변경(선택)
   const [newPassword, setNewPassword] = useState("");
@@ -56,7 +61,7 @@ export default function AdminUserEditForm({
     }
 
     // ✅ payload 구성 (password는 입력됐을 때만 포함)
-    const payload: any = { username: u, displayName: d };
+    const payload: any = { username: u, displayName: d, japaneseLevel };
     if (p) payload.password = p;
 
     setLoading(true);
@@ -107,6 +112,24 @@ export default function AdminUserEditForm({
               onChange={(e) => setDisplayName(e.target.value)}
               autoComplete="off"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="japaneseLevel">일본어 등급</Label>
+            <select
+              id="japaneseLevel"
+              value={japaneseLevel}
+              onChange={(e) =>
+                setJapaneseLevel(e.target.value as "N1" | "N2" | "N3" | "N4" | "N5")
+              }
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+            >
+              <option value="N1">N1</option>
+              <option value="N2">N2</option>
+              <option value="N3">N3</option>
+              <option value="N4">N4</option>
+              <option value="N5">N5</option>
+            </select>
           </div>
 
           <div className="space-y-2">

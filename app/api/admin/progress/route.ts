@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import { ensureJapaneseWritingHistoryTable } from "@/lib/japanese-writing-history";
 
 export const runtime = "nodejs";
 
@@ -61,6 +62,87 @@ export async function GET(req: Request) {
           { status: 400 },
         );
       }
+    }
+
+    if (course === "japanese-writing") {
+      await ensureJapaneseWritingHistoryTable();
+
+      const total = 30;
+      const users = hasExplicitRange
+        ? await sql<ProgressUserRow>`
+          SELECT
+            u.id AS user_id,
+            u.username,
+            u.display_name,
+            COALESCE(count(*) FILTER (
+              WHERE h.counted IS TRUE
+                AND (h.created_at AT TIME ZONE 'Asia/Tokyo')::date BETWEEN ${qFrom!}::date AND ${qTo!}::date
+            ), 0)::int AS completed,
+            CASE
+              WHEN max(h.created_at) FILTER (
+                WHERE h.counted IS TRUE
+                  AND (h.created_at AT TIME ZONE 'Asia/Tokyo')::date BETWEEN ${qFrom!}::date AND ${qTo!}::date
+              ) IS NULL THEN NULL
+              ELSE to_char(
+                max(h.created_at) FILTER (
+                  WHERE h.counted IS TRUE
+                    AND (h.created_at AT TIME ZONE 'Asia/Tokyo')::date BETWEEN ${qFrom!}::date AND ${qTo!}::date
+                ),
+                'YYYY-MM-DD HH24:MI'
+              )
+            END AS last_raised_at
+          FROM users u
+          LEFT JOIN public.japanese_writing_history h
+            ON h.user_id = u.id
+          WHERE u.user_role = 'USER'
+          GROUP BY u.id, u.username, u.display_name
+          HAVING COALESCE(count(*) FILTER (
+            WHERE h.counted IS TRUE
+              AND (h.created_at AT TIME ZONE 'Asia/Tokyo')::date BETWEEN ${qFrom!}::date AND ${qTo!}::date
+          ), 0) > 0
+          ORDER BY completed DESC, u.username ASC
+        `
+        : await sql<ProgressUserRow>`
+          SELECT
+            u.id AS user_id,
+            u.username,
+            u.display_name,
+            COALESCE(count(*) FILTER (
+              WHERE h.counted IS TRUE
+                AND (h.created_at AT TIME ZONE 'Asia/Tokyo')::date
+                  = (NOW() AT TIME ZONE 'Asia/Tokyo')::date
+            ), 0)::int AS completed,
+            CASE
+              WHEN max(h.created_at) FILTER (
+                WHERE h.counted IS TRUE
+                  AND (h.created_at AT TIME ZONE 'Asia/Tokyo')::date
+                    = (NOW() AT TIME ZONE 'Asia/Tokyo')::date
+              ) IS NULL THEN NULL
+              ELSE to_char(
+                max(h.created_at) FILTER (
+                  WHERE h.counted IS TRUE
+                    AND (h.created_at AT TIME ZONE 'Asia/Tokyo')::date
+                      = (NOW() AT TIME ZONE 'Asia/Tokyo')::date
+                ),
+                'YYYY-MM-DD HH24:MI'
+              )
+            END AS last_raised_at
+          FROM users u
+          LEFT JOIN public.japanese_writing_history h
+            ON h.user_id = u.id
+          WHERE u.user_role = 'USER'
+          GROUP BY u.id, u.username, u.display_name
+          ORDER BY completed DESC, u.username ASC
+        `;
+
+      return NextResponse.json({
+        course,
+        range: hasExplicitRange ? { from: qFrom!, to: qTo! } : null,
+        total,
+        users,
+        detail: [],
+        timelineByUser: {},
+      });
     }
 
     // 총 퀴즈 수(코스별)

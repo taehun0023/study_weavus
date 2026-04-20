@@ -227,6 +227,62 @@ function buildJapaneseMonthVariants(question: string) {
   return Array.from(new Set(out));
 }
 
+type ParsedCalendarEvent = {
+  month: number;
+  day: number;
+  label: string;
+};
+
+function parseCalendarEventsFromText(input: string) {
+  const text = String(input ?? "");
+  const lines = text
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const out: ParsedCalendarEvent[] = [];
+
+  for (const line of lines) {
+    let m = line.match(/^(?:\d{4}-)?(1[0-2]|0?[1-9])-(3[01]|[12]?\d)\s*:\s*(.+)$/);
+    if (!m) {
+      m = line.match(/^(1[0-2]|0?[1-9])\/(3[01]|[12]?\d)\s*[:\-]\s*(.+)$/);
+    }
+    if (!m) continue;
+
+    const month = Number(m[1]);
+    const day = Number(m[2]);
+    const label = String(m[3] ?? "").trim();
+    if (!Number.isFinite(month) || !Number.isFinite(day) || !label) continue;
+    if (month < 1 || month > 12 || day < 1 || day > 31) continue;
+    out.push({ month, day, label });
+  }
+
+  return out;
+}
+
+function buildMonthEventAnswer(args: {
+  month: number;
+  question: string;
+  docs: Array<{ title: string; content: string }>;
+}) {
+  const all = args.docs.flatMap((d) => parseCalendarEventsFromText(d.content));
+  const monthEvents = all
+    .filter((e) => e.month === args.month)
+    .sort((a, b) => a.day - b.day);
+
+  const seen = new Set<string>();
+  const unique = monthEvents.filter((e) => {
+    const key = `${e.month}-${e.day}:${e.label}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  if (unique.length === 0) return null;
+  const lines = unique.slice(0, 15).map((e) => `- ${e.month}월 ${e.day}일: ${e.label}`);
+  return `${args.month}월 행사/일정은 다음과 같습니다.\n${lines.join("\n")}`;
+}
+
 function prioritizeDocsForTopic(
   question: string,
   docs: Array<{
@@ -1023,6 +1079,55 @@ export async function POST(req: NextRequest) {
     }
 
     docs = prioritizeDocsForTopic(question, docs);
+
+    const month = extractMonthFromQuestion(question);
+    const asksCalendar = /(행사|일정|달력|캘린더|calendar|イベント|日程|スケジュール)/i.test(
+      question,
+    );
+    if (mode !== "llm" && asksCalendar && month) {
+      const ruleBasedAnswer = buildMonthEventAnswer({ month, question, docs });
+      if (ruleBasedAnswer) {
+        const answer = sanitizeAssistantAnswer(ruleBasedAnswer, question);
+        await recordAssistantUsage({
+          userId: user.id,
+          inputTokens,
+          outputTokens: estimateTokens(answer),
+          source: "knowledge",
+        });
+
+        await tryRecordChatLog({
+          userId: user.id,
+          question,
+          answer,
+          mode: "knowledge",
+          metadata: { retrievalMode, month, ruleBased: true },
+        });
+
+        await tryAppendDailyTxtLog({
+          userLabel: `${user.username}(${user.id})`,
+          mode: "knowledge",
+          question,
+          answer,
+        });
+
+        return NextResponse.json({
+          ok: true,
+          mode: "knowledge",
+          answer,
+          ...(includeDebug
+            ? {
+                debug: {
+                  retrievalMode,
+                  retrievalError,
+                  retrievalKeywords,
+                  month,
+                  ruleBased: true,
+                },
+              }
+            : {}),
+        });
+      }
+    }
 
     if (
       mode !== "llm" &&

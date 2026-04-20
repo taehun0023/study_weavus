@@ -12,6 +12,7 @@ export default function AdminUserCreateForm() {
   const [username, setUsername] = useState("")
   const [displayName, setDisplayName] = useState("")
   const [password, setPassword] = useState("")
+  const [japaneseLevel, setJapaneseLevel] = useState<"N1" | "N2" | "N3" | "N4" | "N5">("N3")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
@@ -38,7 +39,7 @@ export default function AdminUserCreateForm() {
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: u, displayName: d, password }),
+        body: JSON.stringify({ username: u, displayName: d, password, japaneseLevel }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -49,6 +50,7 @@ export default function AdminUserCreateForm() {
       setUsername("")
       setDisplayName("")
       setPassword("")
+      setJapaneseLevel("N3")
       router.refresh()
     } catch {
       setError("유저 등록 중 오류가 발생했습니다.")
@@ -84,6 +86,22 @@ export default function AdminUserCreateForm() {
               placeholder="유저1"
               autoComplete="off"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="japaneseLevel">일본어 등급</Label>
+            <select
+              id="japaneseLevel"
+              value={japaneseLevel}
+              onChange={(e) => setJapaneseLevel(e.target.value as "N1" | "N2" | "N3" | "N4" | "N5")}
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+            >
+              <option value="N1">N1</option>
+              <option value="N2">N2</option>
+              <option value="N3">N3</option>
+              <option value="N4">N4</option>
+              <option value="N5">N5</option>
+            </select>
           </div>
 
           <div className="space-y-2">

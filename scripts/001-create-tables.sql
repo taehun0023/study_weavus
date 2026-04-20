@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
   username VARCHAR(50) UNIQUE NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   display_name VARCHAR(100) NOT NULL,
+  japanese_level VARCHAR(2) NOT NULL DEFAULT 'N3' CHECK (japanese_level IN ('N1', 'N2', 'N3', 'N4', 'N5')),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

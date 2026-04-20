@@ -83,6 +83,9 @@ export default function HeaderUserBar({
       <Button asChild variant="ghost" size="sm" className="h-7 px-2.5 text-xs">
         <Link href="/japanese-writing">日本語作文</Link>
       </Button>
+      <Button asChild variant="ghost" size="sm" className="h-7 px-2.5 text-xs">
+        <Link href="/japanese-speaking">日本語音声</Link>
+      </Button>
 
       {/* Admin tools — amber-accented group */}
       {isAdmin && (
