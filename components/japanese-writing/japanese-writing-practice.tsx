@@ -155,6 +155,7 @@ export default function JapaneseWritingPractice() {
     word: string;
     reading: string;
   } | null>(null);
+  const [showCorrectToast, setShowCorrectToast] = useState(false);
 
   const canSubmit = useMemo(() => {
     return !!problem && userText.trim().length > 0 && !isReviewing;
@@ -294,6 +295,7 @@ export default function JapaneseWritingPractice() {
         targetCount: nextReview.targetCount,
       });
       if (nextReview.result === "ok") {
+        setShowCorrectToast(true);
         setReview(null);
         setUserText("");
         await generateNextProblem();
@@ -314,8 +316,25 @@ export default function JapaneseWritingPractice() {
     }
   }
 
+  useEffect(() => {
+    if (!showCorrectToast) return;
+    const t = window.setTimeout(() => setShowCorrectToast(false), 1300);
+    return () => window.clearTimeout(t);
+  }, [showCorrectToast]);
+
   return (
     <div className="space-y-6">
+      <div
+        className={[
+          "fixed left-1/2 top-20 z-[120] -translate-x-1/2 rounded-md border border-emerald-500/60 bg-emerald-500/15 px-4 py-2 text-sm text-emerald-200 shadow-lg transition-all duration-300",
+          showCorrectToast
+            ? "pointer-events-auto opacity-100 translate-y-0"
+            : "pointer-events-none opacity-0 -translate-y-2",
+        ].join(" ")}
+      >
+        正解です。
+      </div>
+
       <Card className="border-border/60 bg-card/70">
         <CardHeader className="pb-3">
           <CardTitle className="text-2xl tracking-tight">日本語作文</CardTitle>

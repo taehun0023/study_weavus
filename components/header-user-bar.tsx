@@ -21,15 +21,18 @@ type CourseRow = {
 export default function HeaderUserBar({
   user,
   courses,
+  japaneseLevel,
 }: {
   user: AuthUser;
   courses: CourseRow[];
+  japaneseLevel?: "N1" | "N2" | "N3" | "N4" | "N5" | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const displayName =
+  const baseDisplayName =
     (user.display_name ?? "").trim() || (user.username ?? "").trim() || "User";
+  const displayName = japaneseLevel ? `${baseDisplayName}(${japaneseLevel})` : baseDisplayName;
 
   const isAdmin = user.user_role === "ADMIN";
 

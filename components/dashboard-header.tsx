@@ -2,11 +2,27 @@ import Link from "next/link";
 import type { AuthUser } from "@/lib/auth";
 import HeaderUserBar from "@/components/header-user-bar";
 import { listCourses } from "@/lib/courses";
+import { sql } from "@/lib/db";
 
 export default async function DashboardHeader({ user }: { user: AuthUser }) {
   const courses = await listCourses({
     includePrivate: user.user_role === "ADMIN",
   });
+  let japaneseLevel: "N1" | "N2" | "N3" | "N4" | "N5" | null = null;
+  try {
+    const rows = await sql<{ japanese_level: string | null }>`
+      SELECT japanese_level
+      FROM public.users
+      WHERE id = ${user.id}
+      LIMIT 1
+    `;
+    const level = String(rows[0]?.japanese_level ?? "").toUpperCase();
+    if (level === "N1" || level === "N2" || level === "N3" || level === "N4" || level === "N5") {
+      japaneseLevel = level;
+    }
+  } catch {
+    japaneseLevel = null;
+  }
 
   const isAdmin = user.user_role === "ADMIN";
 
@@ -34,7 +50,7 @@ export default async function DashboardHeader({ user }: { user: AuthUser }) {
         </div>
 
         {/* Navigation */}
-        <HeaderUserBar user={user} courses={courses} />
+        <HeaderUserBar user={user} courses={courses} japaneseLevel={japaneseLevel} />
       </div>
     </header>
   );
